@@ -3,134 +3,102 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type TabsContextValue = {
-  value: string;
-  setValue: (value: string) => void;
-};
-
-const TabsContext = React.createContext<TabsContextValue | null>(null);
-
-function useTabs() {
-  const context = React.useContext(TabsContext);
-
-  if (!context) {
-    throw new Error("Tabs components must be used inside <Tabs>");
-  }
-
-  return context;
-}
-
 interface TabsProps {
-  defaultValue?: string;
-  value?: string;
-  onValueChange?: (value: string) => void;
-  className?: string;
+  value: string;
+  onValueChange: (value: string) => void;
   children: React.ReactNode;
+  className?: string;
 }
 
-function Tabs({
-  defaultValue = "",
-  value: controlledValue,
-  onValueChange,
-  className,
-  children,
-}: TabsProps) {
-  const [internalValue, setInternalValue] = React.useState(defaultValue);
-
-  const value = controlledValue ?? internalValue;
-
-  const setValue = (nextValue: string) => {
-    if (controlledValue === undefined) {
-      setInternalValue(nextValue);
-    }
-
-    onValueChange?.(nextValue);
-  };
-
+export function Tabs({ value, onValueChange, children, className }: TabsProps) {
   return (
-    <TabsContext.Provider value={{ value, setValue }}>
-      <div className={cn("w-full", className)}>{children}</div>
-    </TabsContext.Provider>
+    <div className={cn("w-full", className)}>
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child)) {
+          return React.cloneElement(child as React.ReactElement<any>, {
+            currentValue: value,
+            onValueChange,
+          });
+        }
+        return child;
+      })}
+    </div>
   );
 }
 
-const TabsList = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="tablist"
-    className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
-      className
-    )}
-    {...props}
-  />
-));
-
-TabsList.displayName = "TabsList";
-
-interface TabsTriggerProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  value: string;
+export function TabsList({
+  children,
+  className,
+  currentValue,
+  onValueChange,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  currentValue?: string;
+  onValueChange?: (val: string) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex h-11 items-center justify-start rounded-xl bg-muted/60 p-1 text-muted-foreground border border-border/60",
+        className
+      )}
+    >
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child)) {
+          const childElem = child as React.ReactElement<{ value?: string; isSelected?: boolean; onSelect?: () => void }>;
+          return React.cloneElement(childElem, {
+            isSelected: childElem.props.value === currentValue,
+            onSelect: () => onValueChange?.(childElem.props.value || ""),
+          });
+        }
+        return child;
+      })}
+    </div>
+  );
 }
 
-const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-  ({ className, value: tabValue, type = "button", ...props }, ref) => {
-    const { value, setValue } = useTabs();
-    const active = value === tabValue;
-
-    return (
-      <button
-        ref={ref}
-        type={type}
-        role="tab"
-        aria-selected={active}
-        data-state={active ? "active" : "inactive"}
-        onClick={() => setValue(tabValue)}
-        className={cn(
-          "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium",
-          active && "bg-background text-foreground shadow-sm",
-          className
-        )}
-        {...props}
-      />
-    );
-  }
-);
-
-TabsTrigger.displayName = "TabsTrigger";
-
-interface TabsContentProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export function TabsTrigger({
+  value,
+  children,
+  className,
+  isSelected,
+  onSelect,
+}: {
   value: string;
+  children: React.ReactNode;
+  className?: string;
+  isSelected?: boolean;
+  onSelect?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+        isSelected
+          ? "bg-surface text-foreground shadow-subtle border border-border/70"
+          : "hover:text-foreground hover:bg-surface/50",
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
-const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
-  ({ className, value: tabValue, ...props }, ref) => {
-    const { value } = useTabs();
-
-    if (value !== tabValue) {
-      return null;
-    }
-
-    return (
-      <div
-        ref={ref}
-        role="tabpanel"
-        className={cn("mt-2", className)}
-        {...props}
-      />
-    );
-  }
-);
-
-TabsContent.displayName = "TabsContent";
-
-export {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-};
+export function TabsContent({
+  value,
+  children,
+  className,
+  currentValue,
+}: {
+  value: string;
+  children: React.ReactNode;
+  className?: string;
+  currentValue?: string;
+}) {
+  if (value !== currentValue) return null;
+  return <div className={cn("mt-4 animate-fade-in", className)}>{children}</div>;
+}

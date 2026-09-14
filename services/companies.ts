@@ -1,88 +1,99 @@
-import { db } from "@/db";
-import { companies, company_projects, company_applications, profiles } from "@/db/schema";
-import { eq, and, ilike, desc } from "drizzle-orm";
+import { createClient } from "@/lib/supabase/server";
+import { Company } from "@/types";
 
-export async function getCompanies(filters: { search?: string; industry?: string } = {}) {
-  const { search, industry } = filters;
+export async function getCompanies(industry?: string, query?: string): Promise<Company[]> {
+  try {
+    const supabase = await createClient();
+    let qb = supabase.from("companies").select("*, owner:profiles!owner_id(*)");
 
-  return await db.query.companies.findMany({
-    where: (companies, { and, ilike, eq }) => {
-      const conditions = [];
-      if (search) conditions.push(ilike(companies.name, `%${search}%`));
-      if (industry) conditions.push(eq(companies.industry, industry));
-      return and(...conditions);
-    },
-    orderBy: [desc(companies.created_at)],
-  });
+    if (industry && industry !== "All") {
+      qb = qb.eq("industry", industry);
+    }
+    if (query) {
+      qb = qb.or(`name.ilike.%${query}%,description.ilike.%${query}%,industry.ilike.%${query}%`);
+    }
+
+    const { data, error } = await qb.order("created_at", { ascending: false });
+    if (!error && data) {
+      return data.map((c) => ({
+        ...c,
+        website: c.website_url || c.website,
+      }));
+    }
+  } catch (err) {
+    console.error("Error fetching companies:", err);
+  }
+
+  return [];
 }
 
-export async function getCompanyById(id: string) {
-  const company = await db.query.companies.findFirst({
-    where: eq(companies.id, id),
-    with: {
-      owner: true
+export async function getCompanyBySlug(slug: string): Promise<Company | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("companies")
+      .select("*, owner:profiles!owner_id(*)")
+      .or(`slug.eq.${slug},id.eq.${slug}`)
+      .maybeSingle();
+
+    if (data && !error) {
+      return {
+        ...data,
+        website: data.website_url || data.website,
+      };
     }
-  });
+  } catch (err) {
+    console.error("Error fetching company by slug:", err);
+  }
 
-  if (!company) return null;
-
-  const projects = await db.query.company_projects.findMany({
-    where: eq(company_projects.company_id, id),
-    with: {
-      project: true
-    }
-  });
-
-  return {
-    ...company,
-    projects: projects.map(p => p.project)
-  };
+  return null;
 }
 
-export async function createCompany(ownerId: string, data: {
+export async function createCompany(companyData: {
   name: string;
-  slug: string;
   description: string;
+  industry: string;
+  location: string;
   website_url?: string;
   logo_url?: string;
-  industry?: string;
   size?: string;
-  location?: string;
-}) {
-  return await db.insert(companies).values({
+}): Promise<Company> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be signed in to register a company.");
+  }
+
+  const baseSlug = companyData.name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
+
+  const { data, error } = await supabase
+    .from("companies")
+    .insert({
+      name: companyData.name,
+      slug,
+      description: companyData.description,
+      industry: companyData.industry,
+      location: companyData.location,
+      website_url: companyData.website_url || null,
+      logo_url: companyData.logo_url || null,
+      size: companyData.size || null,
+      owner_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
     ...data,
-    owner_id: ownerId,
-  }).returning();
-}
-
-export async function applyToCompany(userId: string, companyId: string, data: {
-  projectId?: string;
-  cover_letter: string;
-  resume_url?: string;
-}) {
-  return await db.insert(company_applications).values({
-    company_id: companyId,
-    user_id: userId,
-    project_id: data.projectId,
-    cover_letter: data.cover_letter,
-    resume_url: data.resume_url,
-  }).returning();
-}
-
-export async function getCompanyApplications(companyId: string) {
-  return await db.query.company_applications.findMany({
-    where: eq(company_applications.company_id, companyId),
-    with: {
-      user: true,
-      project: true
-    },
-    orderBy: [desc(company_applications.created_at)],
-  });
-}
-
-export async function updateApplicationStatus(applicationId: string, status: "Pending" | "Reviewing" | "Accepted" | "Rejected") {
-  return await db.update(company_applications)
-    .set({ status, updated_at: new Date() })
-    .where(eq(company_applications.id, applicationId))
-    .returning();
+    website: data.website_url,
+  };
 }

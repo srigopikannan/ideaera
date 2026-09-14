@@ -1,70 +1,232 @@
-import { db } from "@/db";
-import { hackathons, hackathon_registrations, hackathon_teams, hackathon_team_members, profiles } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { createClient } from "@/lib/supabase/server";
+import { Hackathon } from "@/types";
 
-export async function getHackathons(filters: { search?: string; location?: string } = {}) {
-  const { search, location } = filters;
+function parseHackathonData(h: any): Hackathon {
+  let organizer = "Community Organizer";
+  let region: Hackathon["region"] = "Global";
+  let description = h.description || "";
+  let registration_url = `/hackathons/${h.id}`;
+  let image_url = h.image_url || null;
 
-  return await db.query.hackathons.findMany({
-    where: (hackathons, { and, ilike }) => {
-      const conditions = [];
-      if (search) conditions.push(ilike(hackathons.title, `%${search}%`));
-      if (location) conditions.push(ilike(hackathons.location, `%${location}%`));
-      return and(...conditions);
-    },
-    orderBy: [desc(hackathons.start_date)],
-    with: {
-      organizer: true
+  // Extract [Host: ...]
+  const hostMatch = description.match(/\[Host:\s*([^\]]+)\]/i);
+  if (hostMatch) {
+    organizer = hostMatch[1].trim();
+  }
+
+  // Extract [Region: ...]
+  const regionMatch = description.match(/\[Region:\s*([^\]]+)\]/i);
+  if (regionMatch) {
+    region = regionMatch[1].trim() as any;
+  } else {
+    // Auto-detect region from location, title, and description
+    const text = `${h.title} ${h.location} ${description}`.toLowerCase();
+    if (
+      text.includes("tamil nadu") ||
+      text.includes("chennai") ||
+      text.includes("coimbatore") ||
+      text.includes("madurai") ||
+      text.includes("trichy") ||
+      text.includes("anna univ") ||
+      text.includes("naan mudhalvan") ||
+      text.includes("iit madras") ||
+      text.includes("shaastra") ||
+      text.includes("ceg")
+    ) {
+      region = "Tamil Nadu";
+    } else if (
+      text.includes("india") ||
+      text.includes("bengaluru") ||
+      text.includes("bangalore") ||
+      text.includes("delhi") ||
+      text.includes("mumbai") ||
+      text.includes("hyderabad") ||
+      text.includes("sih") ||
+      text.includes("flipkart") ||
+      text.includes("aicte")
+    ) {
+      region = "India";
+    } else if (
+      text.includes("asia") ||
+      text.includes("singapore") ||
+      text.includes("tokyo") ||
+      text.includes("japan") ||
+      text.includes("korea") ||
+      text.includes("nus")
+    ) {
+      region = "Asia";
+    } else {
+      region = "Global";
     }
-  });
+  }
+
+  // Extract [Link: ...]
+  const linkMatch = description.match(/\[Link:\s*([^\]]+)\]/i);
+  if (linkMatch) {
+    registration_url = linkMatch[1].trim();
+  }
+
+  // Extract [Image: ...]
+  const imageMatch = description.match(/\[Image:\s*([^\]]+)\]/i);
+  if (imageMatch) {
+    image_url = imageMatch[1].trim();
+  }
+
+  // Clean description of bracket tags
+  const cleanDescription = description
+    .replace(/\[Host:\s*[^\]]+\]/gi, "")
+    .replace(/\[Region:\s*[^\]]+\]/gi, "")
+    .replace(/\[Link:\s*[^\]]+\]/gi, "")
+    .replace(/\[Image:\s*[^\]]+\]/gi, "")
+    .trim();
+
+  const now = Date.now();
+  const startTime = new Date(h.start_date).getTime();
+  const endTime = new Date(h.end_date).getTime();
+  const status: "ongoing" | "upcoming" = (now >= startTime && now <= endTime) ? "ongoing" : "upcoming";
+
+  return {
+    ...h,
+    organizer,
+    region,
+    description: cleanDescription,
+    registration_url,
+    image_url: image_url || h.image_url,
+    status,
+    mode: h.location?.toLowerCase().includes("online")
+      ? "Online"
+      : h.location?.toLowerCase().includes("hybrid")
+      ? "Hybrid"
+      : "In-Person",
+    prizes: h.prize_pool || undefined,
+  };
 }
 
-export async function getHackathonById(id: string) {
-  return await db.query.hackathons.findFirst({
-    where: eq(hackathons.id, id),
-    with: {
-      organizer: true
+export async function getHackathons(filter: string = "all"): Promise<Hackathon[]> {
+  try {
+    const supabase = await createClient();
+    let qb = supabase.from("hackathons").select("*, organizer_profile:profiles!organizer_id(*)");
+
+    if (filter === "online") {
+      qb = qb.ilike("location", "%online%");
+    } else if (filter === "in-person") {
+      qb = qb.not("location", "ilike", "%online%");
     }
-  });
-}
 
-export async function registerForHackathon(userId: string, hackathonId: string) {
-  return await db.insert(hackathon_registrations).values({
-    user_id: userId,
-    hackathon_id: hackathonId,
-  });
-}
+    const { data, error } = await qb.order("start_date", { ascending: true });
+    if (!error && data) {
+      const parsed = data.map(parseHackathonData);
+      const now = Date.now();
 
-export async function createHackathonTeam(hackathonId: string, teamName: string, captainId: string) {
-  return await db.transaction(async (tx) => {
-    const [team] = await tx.insert(hackathon_teams).values({
-      hackathon_id: hackathonId,
-      team_name: teamName,
-    }).returning();
+      // Keep ONLY current (live now) and upcoming hackathons - filter out past hackathons!
+      const currentAndUpcoming = parsed.filter((h) => {
+        const endTime = new Date(h.end_date).getTime();
+        return isNaN(endTime) || endTime >= now;
+      });
 
-    await tx.insert(hackathon_team_members).values({
-      team_id: team.id,
-      user_id: captainId,
-      role: "Captain",
-    });
+      const REGION_RANKS: Record<string, number> = {
+        "Tamil Nadu": 1,
+        "India": 2,
+        "Asia": 3,
+        "Global": 4,
+      };
 
-    return team;
-  });
-}
+      return currentAndUpcoming.sort((a, b) => {
+        // Priority to ongoing first, then region, then start date
+        if (a.status === "ongoing" && b.status !== "ongoing") return -1;
+        if (b.status === "ongoing" && a.status !== "ongoing") return 1;
 
-export async function joinHackathonTeam(teamId: string, userId: string) {
-  return await db.insert(hackathon_team_members).values({
-    team_id: teamId,
-    user_id: userId,
-    role: "Member",
-  });
-}
-
-export async function getMyRegisteredHackathons(userId: string) {
-  return await db.query.hackathon_registrations.findMany({
-    where: eq(hackathon_registrations.user_id, userId),
-    with: {
-      hackathon: true
+        const rankA = REGION_RANKS[a.region || "Global"] || 5;
+        const rankB = REGION_RANKS[b.region || "Global"] || 5;
+        if (rankA !== rankB) return rankA - rankB;
+        return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+      });
     }
-  });
+  } catch (err) {
+    console.error("Error fetching hackathons:", err);
+  }
+
+  return [];
+}
+
+export async function getHackathonById(id: string): Promise<Hackathon | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("hackathons")
+      .select("*, organizer_profile:profiles!organizer_id(*)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (data && !error) {
+      return parseHackathonData(data);
+    }
+  } catch (err) {
+    console.error("Error fetching hackathon by id:", err);
+  }
+
+  return null;
+}
+
+export async function createHackathon(params: {
+  title: string;
+  description: string;
+  organizer?: string;
+  region?: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+  registration_deadline?: string;
+  prize_pool?: string;
+  min_team_size?: number;
+  max_team_size?: number;
+  registration_url?: string;
+  image_url?: string;
+}): Promise<Hackathon> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be signed in to submit a hackathon.");
+  }
+
+  const deadline = params.registration_deadline || params.start_date;
+
+  // Pack organizer, region, link, and image into description tags for lossless storage
+  let packedDescription = params.description;
+  if (params.organizer) {
+    packedDescription = `[Host: ${params.organizer}] ${packedDescription}`;
+  }
+  if (params.region) {
+    packedDescription = `[Region: ${params.region}] ${packedDescription}`;
+  }
+  if (params.registration_url) {
+    packedDescription = `[Link: ${params.registration_url}] ${packedDescription}`;
+  }
+  if (params.image_url) {
+    packedDescription = `[Image: ${params.image_url}] ${packedDescription}`;
+  }
+
+  const { data, error } = await supabase
+    .from("hackathons")
+    .insert({
+      title: params.title,
+      description: packedDescription,
+      organizer_id: user.id,
+      location: params.location,
+      start_date: params.start_date,
+      end_date: params.end_date,
+      registration_deadline: deadline,
+      prize_pool: params.prize_pool || null,
+      min_team_size: params.min_team_size || 1,
+      max_team_size: params.max_team_size || 4,
+    })
+    .select("*, organizer_profile:profiles!organizer_id(*)")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return parseHackathonData(data);
 }

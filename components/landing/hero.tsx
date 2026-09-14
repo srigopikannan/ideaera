@@ -1,110 +1,122 @@
+"use client";
+
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Users, Lightbulb, Rocket } from "lucide-react";
+import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { Hero3DScene } from "@/components/3d/Hero3DScene";
+import { Card3D } from "@/components/3d/Card3D";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-background py-24 lg:py-32">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px]" />
+    <section className="relative min-h-[92vh] flex flex-col justify-between pt-32 pb-12 sm:pt-40 sm:pb-16 overflow-hidden bg-[#07080c]">
+      {/* Subtle deep ambient atmospheric light */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-gradient-to-b from-indigo-950/25 via-blue-950/15 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute bottom-10 right-10 w-96 h-96 bg-purple-950/10 rounded-full blur-[120px] pointer-events-none -z-10" />
+
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 w-full flex-1 flex flex-col justify-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          {/* Editorial Typography Column */}
+          <div className="lg:col-span-7 space-y-8 text-left">
+            {/* Eyebrow */}
+            <div className="inline-flex items-center gap-3">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+              <p className="text-[11px] sm:text-xs font-mono tracking-[0.28em] text-neutral-400 uppercase">
+                IDEAS • PEOPLE • POSSIBILITIES
+              </p>
+            </div>
+
+            {/* Main Headline */}
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-light tracking-[-0.03em] text-white leading-[1.06]">
+              Every great thing <br />
+              <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-neutral-100 via-white to-neutral-400">
+                starts as an idea.
+              </span>
+            </h1>
+
+            {/* Supporting Text */}
+            <p className="text-base sm:text-lg text-neutral-400 max-w-xl font-light leading-relaxed">
+              Discover ideas. Find your people. Build what comes next. Connect with creators, designers, and engineers to turn ambitious concepts into working reality.
+            </p>
+
+            {/* Editorial Action Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <Link
+                href="/ideas"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full bg-white text-black font-semibold text-xs uppercase tracking-[0.2em] transition-all duration-300 hover:bg-neutral-200 hover:scale-[1.02] shadow-[0_0_30px_rgba(255,255,255,0.15)]"
+              >
+                <span>Explore Ideas</span>
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+
+              <Link
+                href="/ideas/create"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full border border-white/20 bg-white/[0.04] text-white font-semibold text-xs uppercase tracking-[0.2em] transition-all duration-300 hover:bg-white/10 hover:border-white/40"
+              >
+                <span>Share Your Idea</span>
+              </Link>
+            </div>
+
+            {/* Micro Live Metrics */}
+            <div className="pt-8 grid grid-cols-3 gap-4 sm:gap-6 border-t border-white/[0.08] max-w-lg">
+              <div>
+                <div className="text-2xl sm:text-3xl font-light text-white tracking-tight">195+</div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1">Live Sprints</div>
+              </div>
+              <div>
+                <div className="text-2xl sm:text-3xl font-light text-white tracking-tight">122</div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1">TN Competitions</div>
+              </div>
+              <div>
+                <div className="text-2xl sm:text-3xl font-light text-white tracking-tight">₹1.5Cr+</div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1">Prize Capital</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive 3D Idea Object Column */}
+          <div className="lg:col-span-5 relative flex items-center justify-center">
+            <div className="relative w-full max-w-[480px] aspect-square flex items-center justify-center">
+              <Hero3DScene />
+
+              {/* Floating Architectural Badge: Shaastra Sprint */}
+              <Card3D
+                maxTilt={10}
+                scale={1.03}
+                className="absolute -top-2 right-0 sm:right-2 p-3 px-4 rounded-2xl bg-[#0e1017]/80 border border-white/10 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.5)] pointer-events-auto"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[11px] font-medium tracking-wide text-neutral-200">IIT Madras Shaastra</span>
+                </div>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">₹5,00,000 Incubation Pool</p>
+              </Card3D>
+
+              {/* Floating Architectural Badge: Anna Univ */}
+              <Card3D
+                maxTilt={10}
+                scale={1.03}
+                className="absolute -bottom-2 left-0 sm:left-2 p-3 px-4 rounded-2xl bg-[#0e1017]/80 border border-white/10 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.5)] pointer-events-auto"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-indigo-400" />
+                  <span className="text-[11px] font-medium tracking-wide text-neutral-200">Kurukshetra Sprint</span>
+                </div>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">CEG Guindy • Chennai</p>
+              </Card3D>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="container mx-auto px-4 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary ring-1 ring-inset ring-primary/20 mb-6">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+      {/* Bottom Scroll Prompt (Part 8 Requirement) */}
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 w-full pt-8 flex items-center justify-between border-t border-white/[0.05]">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-neutral-500">
+            SCROLL TO EXPLORE
           </span>
-          Join the professional builder community
+          <ArrowDown className="h-3 w-3 text-neutral-500 animate-bounce" />
         </div>
-
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-foreground mb-6 max-w-4xl mx-auto leading-[1.1]">
-          Have an Idea? <br />
-          <span className="text-primary">Find the People to Build It.</span>
-        </h1>
-
-        <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-          Connect with people who have the skills, interests and ambition to
-          turn ideas into real projects. The professional ecosystem for
-          founders, developers, and designers.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button
-            size="lg"
-            className="h-12 px-8 text-md font-semibold gap-2 group"
-            asChild
-          >
-            <Link href="/people">
-              Find Teammates
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-          </Button>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-12 px-8 text-md font-medium"
-              asChild
-            >
-              <Link href="/hackathons">Explore Hackathons</Link>
-            </Button>
-
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-12 px-8 text-md font-medium"
-              asChild
-            >
-              <Link href="/ideas/create">Post Your Idea</Link>
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto pt-12 border-t border-border/50">
-          <div className="flex items-center gap-4 text-left p-4 rounded-2xl transition-colors hover:bg-accent/50">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Users className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground">
-                Complementary Skills
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Find exactly who you need to fill your team&apos;s gaps.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-left p-4 rounded-2xl transition-colors hover:bg-accent/50">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Lightbulb className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground">
-                Vetted Ideas
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Discover and contribute to high-potential concepts.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-left p-4 rounded-2xl transition-colors hover:bg-accent/50">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Rocket className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground">
-                Real-World Impact
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Build startups and products that solve actual problems.
-              </p>
-            </div>
-          </div>
+        <div className="text-[10px] font-mono uppercase tracking-[0.25em] text-neutral-600 hidden sm:block">
+          IDEA ERA PLATFORM
         </div>
       </div>
     </section>

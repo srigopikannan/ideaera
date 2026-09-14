@@ -1,185 +1,200 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { createProjectAction } from "@/app/(dashboard)/actions/projects";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FolderPlus, Lightbulb } from "lucide-react";
-import { createProjectAction, getMyProjectsAction } from "@/app/(dashboard)/actions/projects";
-import { getMyIdeasAction } from "@/app/(dashboard)/actions/ideas";
-import { toast } from "sonner";
-
-const formSchema = z.object({
-  name: z.string().min(3, "Project name must be at least 3 characters").max(100),
-  description: z.string().min(10, "Please provide a brief description"),
-  ideaId: z.string().optional(),
-  repository_url: z.string().url("Invalid repository URL").optional().or(z.literal("")),
-});
-
-interface Idea {
-  id: string;
-  title: string;
-}
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, FolderGit2, Globe, ImageIcon, Rocket } from "lucide-react";
+import { Github } from "@/components/ui/brand-icons";
 
 export default function CreateProjectPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [myIdeas, setMyIdeas] = useState<Idea[]>([]);
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [status, setStatus] = React.useState("in_development");
+  const [technologies, setTechnologies] = React.useState("");
+  const [repositoryUrl, setRepositoryUrl] = React.useState("");
+  const [websiteUrl, setWebsiteUrl] = React.useState("");
+  const [imageUrl, setImageUrl] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      ideaId: "",
-      repository_url: "",
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!name.trim() || !description.trim()) {
+      setError("Please provide a project name and overview.");
+      return;
+    }
+
     setIsLoading(true);
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("description", description);
+    formData.append("status", status);
+    formData.append("technologies", technologies);
+    formData.append("repository_url", repositoryUrl);
+    formData.append("website_url", websiteUrl);
+    formData.append("image_url", imageUrl);
+
     try {
-      const result = await createProjectAction({
-        name: values.name,
-        description: values.description,
-        ideaId: values.ideaId || undefined,
-      });
-      if (result.success) {
-        toast.success("Project workspace created successfully!");
-        router.push("/projects");
-      } else {
-        toast.error(result.error || "Failed to create project");
+      const res = await createProjectAction(formData);
+      if (res.error) {
+        setError(res.error);
+        setIsLoading(false);
+        return;
       }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
+
+      router.push("/projects");
+    } catch (err: any) {
+      setError(err?.message || "Failed to create project.");
       setIsLoading(false);
     }
   };
 
-  // Load my ideas to allow conversion
-  useEffect(() => {
-    getMyIdeasAction().then(setMyIdeas);
-  }, []);
-
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Create New Project</h1>
-        <p className="text-muted-foreground">Establish a workspace to collaborate, track tasks, and reach your milestones.</p>
+    <div className="max-w-3xl mx-auto space-y-6 pb-16">
+      <div className="flex items-center justify-between">
+        <Link
+          href="/projects"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Projects
+        </Link>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <Card className="p-6 space-y-6">
-            <div className="grid gap-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Project Nexus" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="What is this project about and what are you building?"
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-6 space-y-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Lightbulb className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Convert from an Idea</h3>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Linking a project to an existing idea keeps your vision connected and allows you to track the evolution from concept to product.
-            </p>
-            <FormField
-              control={form.control}
-              name="ideaId"
-              render={({ field }) => (
-                <FormItem>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an idea to convert..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {myIdeas.map(idea => (
-                        <SelectItem key={idea.id} value={idea.id}>
-                          {idea.title}
-                        </SelectItem>
-                      ))}
-                      {myIdeas.length === 0 && (
-                        <SelectItem value="" disabled>No ideas found</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </Card>
-
-          <Card className="p-6 space-y-6">
-            <div className="grid gap-6">
-              <FormField
-                control={form.control}
-                name="repository_url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>GitHub Repository URL (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://github.com/username/repo" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </Card>
-
-          <div className="flex justify-end gap-4">
-            <Button variant="ghost" type="button" onClick={() => router.push("/projects")}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} className="px-8 gap-2">
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              <FolderPlus className="h-4 w-4" />
-              Create Workspace
-            </Button>
+      <Card className="border-border shadow-card bg-surface">
+        <CardHeader className="pb-4 border-b border-border">
+          <div className="flex items-center gap-2 text-primary text-xs font-semibold uppercase tracking-wider mb-1">
+            <FolderGit2 className="h-4 w-4" />
+            <span>Launch Showcase</span>
           </div>
-        </form>
-      </Form>
+          <CardTitle className="text-xl">Showcase a New Project</CardTitle>
+          <CardDescription>
+            Display what your team has built, connect your GitHub repository, and attract contributors.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-6">
+          {error && (
+            <div className="mb-6 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-xs font-medium">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Project Name
+              </label>
+              <Input
+                placeholder="e.g. Lumina Design Token Engine"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                  Current Status
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-foreground shadow-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="in_development">In Development (Building)</option>
+                  <option value="beta">Public Beta</option>
+                  <option value="launched">Launched</option>
+                  <option value="idea">Idea / Prototype</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                  Technologies / Tech Stack (Comma-separated)
+                </label>
+                <Input
+                  placeholder="Next.js, TypeScript, PostgreSQL, Docker"
+                  value={technologies}
+                  onChange={(e) => setTechnologies(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Project Overview & Architecture
+              </label>
+              <Textarea
+                rows={5}
+                placeholder="Explain the mission of this product, key technical architecture decisions, performance benchmarks, and how developers can participate..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                  GitHub / Repository Link
+                </label>
+                <Input
+                  placeholder="https://github.com/organization/repo"
+                  value={repositoryUrl}
+                  onChange={(e) => setRepositoryUrl(e.target.value)}
+                  leftIcon={<Github className="h-4 w-4" />}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                  Live Deployment Website URL
+                </label>
+                <Input
+                  placeholder="https://yourproject.app"
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  leftIcon={<Globe className="h-4 w-4" />}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Cover Image URL (Optional)
+              </label>
+              <Input
+                placeholder="https://images.unsplash.com/..."
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                leftIcon={<ImageIcon className="h-4 w-4" />}
+              />
+            </div>
+
+            <div className="pt-4 border-t border-border flex justify-end gap-3">
+              <Link href="/projects">
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
+              </Link>
+              <Button type="submit" variant="default" isLoading={isLoading}>
+                <Rocket className="h-4 w-4 mr-1.5" />
+                Publish Showcase
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-import { Card } from "@/components/ui/card";

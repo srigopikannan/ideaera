@@ -1,341 +1,381 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { X, Plus, Lightbulb, Loader2 } from "lucide-react";
-import { createIdeaAction, getAvailableSkillsAction } from "@/app/(dashboard)/actions/ideas";
-import { toast } from "sonner";
+import { createIdeaAction } from "@/app/(dashboard)/actions/ideas";
+import { ArrowLeft, Sparkles, Send, Tag, Layers, Compass } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const formSchema = z.object({
-  title: z.string().min(5, "Title must be at least 5 characters").max(100),
-  problem: z.string().min(20, "Please describe the problem more clearly"),
-  solution: z.string().min(20, "Please describe your solution more clearly"),
-  description: z.string().min(50, "Provide a more detailed description"),
-  category: z.string().min(1, "Please select a category"),
-  stage: z.enum(["Idea", "Planning", "Prototype", "MVP", "Testing", "Launch"]),
-  visibility: z.enum(["public", "private"]),
-  requirements: z.array(z.object({
-    skillId: z.string(),
-    minLevel: z.enum(["Beginner", "Intermediate", "Advanced", "Expert"]),
-    priority: z.enum(["low", "medium", "high"]),
-  })).min(1, "Add at least one skill requirement"),
-});
-
-interface Skill {
-  id: string;
-  name: string;
-}
+const CATEGORIES = [
+  { id: "AI & Machine Learning", color: "99, 102, 241" }, // Indigo
+  { id: "Developer Tools", color: "56, 189, 248" }, // Cyan
+  { id: "Climate & Sustainability", color: "16, 185, 129" }, // Emerald
+  { id: "Health & Biotech", color: "52, 211, 153" }, // Mint
+  { id: "Security & Cloud", color: "245, 158, 11" }, // Amber
+  { id: "Web3 & Open Source", color: "168, 85, 247" }, // Purple
+];
 
 export default function CreateIdeaPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [title, setTitle] = React.useState("");
+  const [category, setCategory] = React.useState(CATEGORIES[0].id);
+  const [tags, setTags] = React.useState("");
+  const [problem, setProblem] = React.useState("");
+  const [solution, setSolution] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      title: "",
-      problem: "",
-      solution: "",
-      description: "",
-      category: "",
-      stage: "Idea",
-      visibility: "public",
-      requirements: [{ skillId: "", minLevel: "Intermediate", priority: "medium" }],
-    },
-  });
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
-  const addRequirement = () => {
-    const current = form.getValues("requirements");
-    form.setValue("requirements", [...current, { skillId: "", minLevel: "Intermediate", priority: "medium" }]);
-  };
+  const activeCategoryConfig = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
 
-  const removeRequirement = (index: number) => {
-    const current = form.getValues("requirements");
-    form.setValue("requirements", current.filter((_, i) => i !== index));
-  };
+  const tagList = React.useMemo(() => {
+    return tags
+      .split(/[,\s]+/)
+      .map((t) => t.trim().replace(/^#/, ""))
+      .filter(Boolean);
+  }, [tags]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsLoading(true);
-    try {
-      const result = await createIdeaAction(values);
-      if (result.success) {
-        toast.success("Idea posted successfully!");
-        router.push("/ideas");
-      } else {
-        toast.error(result.error || "Failed to create idea");
+  // Idea Seed Animation Canvas
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationId: number;
+    let width = 0;
+    let height = 0;
+
+    const handleResize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.scale(dpr, dpr);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    // Particles system
+    const particleCount = 45;
+    const particles = Array.from({ length: particleCount }, (_, i) => ({
+      angle: (i / particleCount) * Math.PI * 2,
+      dist: 28 + Math.random() * 80,
+      baseDist: 28 + Math.random() * 80,
+      speed: 0.006 + Math.random() * 0.01,
+      size: 1 + Math.random() * 2,
+      alpha: 0.2 + Math.random() * 0.6,
+    }));
+
+    let t = 0;
+
+    const render = () => {
+      t += 0.016;
+      ctx.clearRect(0, 0, width, height);
+
+      const cx = width / 2;
+      const cy = height / 2;
+
+      const hasTitle = title.trim().length > 0;
+      const textDensity = Math.min((problem.length + solution.length) / 100, 1);
+      const col = activeCategoryConfig.color;
+
+      // 1. Ignition Shockwave on Submit
+      if (isSubmitting) {
+        const wave = ((t * 80) % 180) + 10;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, wave, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(" + col + ", " + (1 - wave / 180) + ")";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
       }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsLoading(false);
+
+      // 2. Ambient Core Glow
+      const glowR = (hasTitle ? 55 + textDensity * 40 : 25) * (isSubmitting ? 1.5 : 1);
+      const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+      glowGrad.addColorStop(0, "rgba(" + col + ", " + (hasTitle ? 0.4 : 0.15) + ")");
+      glowGrad.addColorStop(0.7, "rgba(" + col + ", " + (hasTitle ? 0.12 : 0.03) + ")");
+      glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Stardust Accretion Particles
+      particles.forEach((pt, i) => {
+        pt.angle += pt.speed * (hasTitle ? 1.4 : 0.5);
+        const dist = (pt.baseDist + Math.sin(t * 2 + i) * 6) * (hasTitle ? 1 + textDensity * 0.3 : 0.8);
+        const px = cx + Math.cos(pt.angle) * dist;
+        const py = cy + Math.sin(pt.angle) * (dist * 0.45);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(px, py, pt.size, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(" + col + ", " + (pt.alpha * (hasTitle ? 0.8 : 0.3)) + ")";
+        ctx.shadowColor = "rgba(" + col + ", 0.7)";
+        ctx.shadowBlur = 4;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // 4. Gyroscopic Coordinate Rings (Awaken when title exists)
+      if (hasTitle) {
+        const ringR = 48 + textDensity * 12 + Math.sin(t * 1.5) * 2;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, ringR, ringR * 0.38, t * 0.8, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(" + col + ", 0.5)";
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 5]);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, ringR * 1.2, ringR * 0.42, -t * 0.6 + 1.2, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 5. Tag Satellites
+      tagList.slice(0, 6).forEach((tag, idx) => {
+        const satAngle = (idx / Math.min(tagList.length, 6)) * Math.PI * 2 + t * 0.3;
+        const satDist = 85 + (idx % 2) * 15;
+        const sx = cx + Math.cos(satAngle) * satDist;
+        const sy = cy + Math.sin(satAngle) * (satDist * 0.45);
+
+        // Tether line
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(sx, sy);
+        ctx.strokeStyle = "rgba(" + col + ", 0.25)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.stroke();
+
+        // Node
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowColor = "rgba(" + col + ", 0.8)";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // 6. Central Seed Nucleus (Mass grows with title & description)
+      const coreR = (hasTitle ? 16 + textDensity * 10 : 8) * (isSubmitting ? 1.3 : 1);
+      const coreGrad = ctx.createRadialGradient(
+        cx - coreR * 0.25,
+        cy - coreR * 0.25,
+        1,
+        cx,
+        cy,
+        coreR
+      );
+      coreGrad.addColorStop(0, "#ffffff");
+      coreGrad.addColorStop(0.35, "rgba(" + col + ", 0.95)");
+      coreGrad.addColorStop(0.8, "rgba(" + col + ", 0.5)");
+      coreGrad.addColorStop(1, "rgba(10, 12, 19, 0.4)");
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fillStyle = coreGrad;
+      ctx.shadowColor = "rgba(" + col + ", 0.9)";
+      ctx.shadowBlur = 18;
+      ctx.fill();
+      ctx.restore();
+
+      animationId = requestAnimationFrame(render);
+    };
+
+    animationId = requestAnimationFrame(render);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(animationId);
+    };
+  }, [title, problem, solution, activeCategoryConfig, tagList, isSubmitting]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!title.trim() || (!problem.trim() && !solution.trim())) {
+      setError("Please provide a title and articulate the thesis.");
+      return;
+    }
+
+    const effectiveProblem = problem.trim() || "Emergent architectural opportunity.";
+    const effectiveSolution = solution.trim() || "Proposed system model.";
+    const effectiveDescription = effectiveProblem + "\n\n" + effectiveSolution;
+
+    setIsSubmitting(true);
+    const formData = new FormData();
+    formData.append("title", title.trim());
+    formData.append("category", category);
+    formData.append("tags", tags.trim());
+    formData.append("problem", effectiveProblem);
+    formData.append("solution", effectiveSolution);
+    formData.append("description", effectiveDescription);
+
+    try {
+      const res = await createIdeaAction(formData);
+      if (res.error) {
+        setError(res.error);
+        setIsSubmitting(false);
+        return;
+      }
+      setTimeout(() => {
+        router.push("/ideas");
+      }, 450);
+    } catch (err: any) {
+      setError(err?.message || "Failed to ignite concept.");
+      setIsSubmitting(false);
     }
   };
 
-  // Load skills on mount
-  useEffect(() => {
-    getAvailableSkillsAction().then(setSkills);
-  }, []);
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Share Your Idea</h1>
-        <p className="text-muted-foreground">Describe your vision and find the perfect teammates to bring it to life.</p>
+    <div className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col justify-between p-6 sm:p-12 select-none overflow-x-hidden">
+      {/* Top Bar Navigation */}
+      <div className="flex items-center justify-between z-20">
+        <Link
+          href="/ideas"
+          className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Exit Idea Lab</span>
+        </Link>
+
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-white/10 bg-[#0a0c13]/80 backdrop-blur-md">
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-400">
+            INCUBATION CHAMBER
+          </span>
+        </div>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <Card className="p-6 space-y-6">
-            <div className="grid gap-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., AI-Powered Personal Finance Manager" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="FinTech">FinTech</SelectItem>
-                          <SelectItem value="HealthTech">HealthTech</SelectItem>
-                          <SelectItem value="EdTech">EdTech</SelectItem>
-                          <SelectItem value="SaaS">SaaS</SelectItem>
-                          <SelectItem value="Web3">Web3</SelectItem>
-                          <SelectItem value="AI/ML">AI/ML</SelectItem>
-                          <SelectItem value="E-commerce">E-commerce</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="stage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Current Stage</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select stage" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Idea">Idea</SelectItem>
-                          <SelectItem value="Planning">Planning</SelectItem>
-                          <SelectItem value="Prototype">Prototype</SelectItem>
-                          <SelectItem value="MVP">MVP</SelectItem>
-                          <SelectItem value="Testing">Testing</SelectItem>
-                          <SelectItem value="Launch">Launch</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 space-y-6">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Lightbulb className="h-5 w-5 text-primary" />
-              The Vision
-            </h3>
-            <div className="grid gap-6">
-              <FormField
-                control={form.control}
-                name="problem"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>The Problem</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="What pain point are you solving?"
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="solution"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>The Solution</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="How does your idea solve this problem?"
-                        className="min-h-[120px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Provide a deep dive into the features, target audience, and goals..."
-                        className="min-h-[200px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Teammate Requirements</h3>
-              <Button type="button" variant="outline" size="sm" onClick={addRequirement} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Add Skill
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {form.watch("requirements").map((_, index) => (
-                <div key={index} className="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl bg-muted/50 border relative group">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeRequirement(index)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-
-                  <FormField
-                    control={form.control}
-                    name={`requirements.${index}.skillId`}
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-xs">Skill</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select skill" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {skills.map(s => (
-                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`requirements.${index}.minLevel`}
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:w-40">
-                        <FormLabel className="text-xs">Min Level</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Level" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Beginner">Beginner</SelectItem>
-                            <SelectItem value="Intermediate">Intermediate</SelectItem>
-                            <SelectItem value="Advanced">Advanced</SelectItem>
-                            <SelectItem value="Expert">Expert</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`requirements.${index}.priority`}
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:w-40">
-                        <FormLabel className="text-xs">Priority</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Priority" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <div className="flex justify-end gap-4">
-            <Button variant="ghost" type="button" onClick={() => router.push("/ideas")}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} className="px-8">
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Post Idea
-            </Button>
+      {/* Main Idea Lab Studio Form */}
+      <form onSubmit={handleSubmit} className="relative z-10 max-w-4xl w-full mx-auto space-y-8 my-auto py-8">
+        {/* Error Alert */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-mono text-center">
+            {error}
           </div>
-        </form>
-      </Form>
+        )}
+
+        {/* 1. Colossal Fluid Title Input */}
+        <div className="text-center space-y-2">
+          <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-500 block">
+            01 // THESIS PROPOSITION
+          </span>
+          <input
+            type="text"
+            placeholder="Name your thesis..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full text-center text-3xl sm:text-5xl lg:text-6xl font-extralight text-white bg-transparent placeholder:text-neutral-700 focus:outline-none tracking-tight leading-tight"
+            autoFocus
+            required
+          />
+        </div>
+
+        {/* 2. Central Living Idea Seed Canvas Organism */}
+        <div className="relative h-60 sm:h-72 w-full flex items-center justify-center pointer-events-none">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+        </div>
+
+        {/* 3. Category Shift Arc */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setCategory(cat.id)}
+              className={cn(
+                "px-3.5 py-1.5 rounded-full text-xs font-mono uppercase tracking-wider transition-all border",
+                category === cat.id
+                  ? "bg-white text-black font-semibold border-white shadow-xl scale-105"
+                  : "bg-white/[0.03] text-neutral-400 border-white/10 hover:border-white/20 hover:text-white"
+              )}
+            >
+              {cat.id}
+            </button>
+          ))}
+        </div>
+
+        {/* 4. Integrated Editorial Blueprint Inputs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-400 block">
+              02 // THE PROBLEM STATEMENT
+            </span>
+            <textarea
+              rows={3}
+              placeholder="What friction exists in the world today?"
+              value={problem}
+              onChange={(e) => setProblem(e.target.value)}
+              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-400 block">
+              03 // ARCHITECTURAL BLUEPRINT
+            </span>
+            <textarea
+              rows={3}
+              placeholder="How does your proposed architecture solve it?"
+              value={solution}
+              onChange={(e) => setSolution(e.target.value)}
+              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none"
+            />
+          </div>
+        </div>
+
+        {/* 5. Satellite Tags Input */}
+        <div className="max-w-md mx-auto space-y-2 text-center pt-2">
+          <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-500 block">
+            SATELLITE TAGS
+          </span>
+          <input
+            type="text"
+            placeholder="e.g. rust, distributed-systems, zero-knowledge"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            className="w-full text-center px-4 py-2 rounded-full border border-white/10 bg-white/[0.02] text-xs font-mono text-indigo-300 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
+          />
+        </div>
+
+        {/* 6. Ignite Concept Action */}
+        <div className="flex items-center justify-center pt-6">
+          <button
+            type="submit"
+            disabled={isSubmitting || !title.trim()}
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-2xl hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Send className="h-3.5 w-3.5" />
+            <span>{isSubmitting ? "Igniting Concept..." : "Ignite Idea Into Orbit"}</span>
+          </button>
+        </div>
+      </form>
+
+      {/* Footer Philosophy Note */}
+      <div className="text-center text-[10px] font-mono text-neutral-600 uppercase tracking-widest z-10">
+        IDEA ERA // SYNTHESIS LAB • WHERE IDEAS BECOME POSSIBILITIES
+      </div>
     </div>
   );
 }

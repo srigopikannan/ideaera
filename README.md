@@ -1,78 +1,68 @@
-# IdeaEra 💬✨
+﻿# IdeaEra — Where Innovators Turn Ideas Into Reality 🚀
 
-> A WhatsApp-inspired messaging application with AI-powered group chat summarization.
+IdeaEra is a modern social innovation and hackathon squad formation platform designed for student developers, designers, engineers, and creators. Discover 195+ real-time verified collegiate competitions and national challenges prioritized from **Tamil Nadu** to across **India**, assemble balanced squads, validate breakthrough ideas, and showcase projects.
 
-IdeaEra is a medium-sized messaging application designed to make large group conversations easier to understand. It provides a familiar chat experience while using AI to extract the most important information from long conversations.
+---
 
-## 🚀 Features
+## ✨ Features
 
-### 💬 Messaging
-- WhatsApp-inspired chat interface
-- Individual and group conversations
-- Realistic message history
-- Message timestamps
-- Multiple chat participants
-- Smooth chat navigation
+- **⭐ 195+ Real-Time Hackathons & Sprints**:
+  - **122 Tamil Nadu Collegiate Cups**: CEG Anna University (Kurukshetra), IIT Madras (Shaastra), NIT Trichy (Pragyan), PSG Tech (Kriya), VIT Vellore (graVITas), SRM, Saveetha, Sathyabama, KPR, CIT, and more.
+  - **63 Pan-India National Challenges**: Smart India Hackathon (SIH), Flipkart GRiD, ETHIndia, HackCBS, IIT Bombay Techfest, TCS InnoVista, Tata Crucible.
+- **🤝 Squad Formation**: Form multidisciplinary teams (AI engineers, UI/UX designers, backend developers) directly for specific hackathons with single-click routing.
+- **💡 Idea Validation & Showcase**: Publish ideas, gather feedback, and find early collaborators.
+- **🔍 Built-in Search Engine Optimization (SEO)**: Preconfigured obots.txt, dynamic sitemap.xml, and metadata for immediate discovery on Google.
+- **⚡ Modern Tech Stack**: Built with Next.js 16 (App Router & Turbopack), React 19, Tailwind CSS, and Supabase (PostgreSQL & Auth).
 
-### 🤖 AI-Powered Chat Summarization
+---
 
-IdeaEra can analyze a large group conversation and generate a structured summary.
+## 🛠️ Tech Stack
 
-The AI summary includes:
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Database & Authentication**: [Supabase](https://supabase.com/) (PostgreSQL, Row Level Security)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Language**: TypeScript & Modern ES Modules
 
-- **What is this chat about?**
-- **Key Topics**
-- **Important Dates**
-- **Important Venue**
-- **Important Information**
-- **Questions**
-- **Decisions Made**
-- **Action Items**
-- **Upcoming Schedule**
-- **Other Things to Know**
+---
 
-### 🔎 Source Message Linking
+## 🚀 Getting Started
 
-Every important piece of information extracted from the conversation is connected to its original message.
+### 1. Prerequisites
+- [Node.js](https://nodejs.org/) v18+ installed.
 
-Clicking **View Source** takes the user directly to the original message and highlights it.
+### 2. Installation
+Clone the repository and install dependencies:
+`ash
+git clone https://github.com/your-username/ideaera.git
+cd ideaera
+npm install
+`
 
-This makes the AI summary:
+### 3. Environment Variables
+Create a .env.local file in the root directory:
+`env
+NEXT_PUBLIC_SUPABASE_URL=https://jhmnemzgbcwcryzolzbz.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD
+`
 
-- Easier to verify
-- More transparent
-- More useful for large conversations
+### 4. Run Development Server
+`ash
+npm run dev
+`
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 📊 Realistic Group Dataset
+---
 
-The project includes a realistic college project group conversation containing:
+## 🌐 Deployment
 
-- **427 messages**
-- **6 participants**
-- **5 days of conversation**
-- Multiple discussions, questions, decisions, deadlines and action items
+The easiest way to deploy IdeaEra is with [Vercel](https://vercel.com):
+1. Import your GitHub repository to Vercel.
+2. Add your Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY).
+3. Click **Deploy**.
 
-## 🧠 How It Works
+---
 
-The basic flow is:
+## 📄 License
 
-```text
-User opens IdeaEra
-        ↓
-Login / Entry
-        ↓
-Chat Home
-        ↓
-Open a conversation
-        ↓
-Select a group chat
-        ↓
-Click "✨ Use AI to Summarize"
-        ↓
-AI processing
-        ↓
-Structured Chat Summary
-        ↓
-Click "View Source"
-        ↓
-Original message is highlighted
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

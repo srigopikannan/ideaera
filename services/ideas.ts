@@ -1,163 +1,236 @@
-import { db } from "@/db";
-import { ideas, idea_requirements, idea_bookmarks, profiles, skills } from "@/db/schema";
-import { eq, and, or, desc } from "drizzle-orm";
+import { createClient } from "@/lib/supabase/server";
+import { Idea, IdeaComment } from "@/types";
 
-export async function createIdea(userId: string, data: {
+function mapIdea(raw: any, isLiked: boolean = false): Idea {
+  const authorProfile = raw.creator || raw.author || null;
+  const rawTags = raw.tags;
+  let parsedTags: string[] = [];
+  if (Array.isArray(rawTags)) {
+    parsedTags = rawTags;
+  } else if (typeof rawTags === "string" && rawTags.trim()) {
+    parsedTags = rawTags.split(",").map((t: string) => t.trim()).filter(Boolean);
+  } else if (raw.category) {
+    parsedTags = [raw.category];
+  }
+
+  return {
+    id: raw.id,
+    author_id: raw.creator_id || raw.author_id,
+    author: authorProfile,
+    title: raw.title,
+    description: raw.description || `${raw.problem || ""}\n\n${raw.solution || ""}`.trim(),
+    category: raw.category || "AI & Machine Learning",
+    tags: parsedTags,
+    status: (raw.stage?.toLowerCase() === "implemented" ? "implemented" : raw.stage?.toLowerCase() === "in_progress" ? "in_progress" : "open") as any,
+    likes_count: raw.likes_count || 0,
+    comments_count: raw.comments_count || 0,
+    created_at: raw.created_at,
+    updated_at: raw.updated_at || raw.created_at,
+    is_liked: isLiked,
+  };
+}
+
+export async function getIdeas(
+  category?: string,
+  sort: "trending" | "popular" | "recent" = "trending",
+  query?: string
+): Promise<Idea[]> {
+  try {
+    const supabase = await createClient();
+
+    let qb = supabase.from("ideas").select("*, creator:profiles!creator_id(*)");
+
+    if (category && category !== "All") {
+      qb = qb.eq("category", category);
+    }
+    if (query) {
+      qb = qb.or(`title.ilike.%${query}%,description.ilike.%${query}%,problem.ilike.%${query}%,solution.ilike.%${query}%`);
+    }
+
+    qb = qb.order("created_at", { ascending: false });
+
+    const { data, error } = await qb;
+    if (data && !error) {
+      return data.map((idea) => mapIdea(idea, false));
+    }
+  } catch (err) {
+    console.error("Error in getIdeas:", err);
+  }
+
+  return [];
+}
+
+export async function getIdeaById(id: string): Promise<Idea | null> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("ideas")
+      .select("*, creator:profiles!creator_id(*)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (data && !error) {
+      return mapIdea(data, false);
+    }
+  } catch (err) {
+    console.error("Error in getIdeaById:", err);
+  }
+
+  return null;
+}
+
+export async function getIdeaComments(ideaId: string): Promise<IdeaComment[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("idea_comments")
+      .select("*, user:profiles(*)")
+      .eq("idea_id", ideaId)
+      .order("created_at", { ascending: true });
+
+    if (data && !error) return data;
+  } catch (err) {
+    console.error("Error in getIdeaComments (table may not exist):", err);
+  }
+
+  return [];
+}
+
+export async function createIdea(data: {
   title: string;
-  problem: string;
-  solution: string;
   description: string;
   category: string;
-  stage: "Idea" | "Planning" | "Prototype" | "MVP" | "Testing" | "Launch";
-  visibility: string;
-  requirements: Array<{ skillId: string; minLevel: "Beginner" | "Intermediate" | "Advanced" | "Expert"; priority: string }>;
-}) {
-  return await db.transaction(async (tx) => {
-    const [idea] = await tx.insert(ideas).values({
-      creator_id: userId,
-      title: data.title,
-      problem: data.problem,
-      solution: data.solution,
-      description: data.description,
-      category: data.category,
-       stage: data.stage as "Idea" | "Planning" | "Prototype" | "MVP" | "Testing" | "Launch",
-      visibility: data.visibility,
-    }).returning();
-
-    if (data.requirements && data.requirements.length > 0) {
-      await tx.insert(idea_requirements).values(
-        data.requirements.map(req => ({
-          idea_id: idea.id,
-          skill_id: req.skillId,
-          min_level: req.minLevel,
-          priority: req.priority,
-        }))
-      );
-    }
-
-    return idea;
-  });
-}
-
-export async function updateIdea(ideaId: string, userId: string, data: {
-  title?: string;
+  tags: string[];
   problem?: string;
   solution?: string;
-  description?: string;
-  category?: string;
-  stage?: "Idea" | "Planning" | "Prototype" | "MVP" | "Testing" | "Launch";
-  visibility?: string;
-  requirements?: Array<{ skillId: string; minLevel: "Beginner" | "Intermediate" | "Advanced" | "Expert"; priority: string }>;
-}) {
-  // Check ownership
-  const idea = await db.query.ideas.findFirst({
-    where: and(eq(ideas.id, ideaId), eq(ideas.creator_id, userId)),
-  });
-  if (!idea) throw new Error("Idea not found or unauthorized");
+}): Promise<Idea> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return await db.transaction(async (tx) => {
-    await tx.update(ideas)
-      .set({
-        title: data.title,
-        problem: data.problem,
-        solution: data.solution,
-        description: data.description,
-        category: data.category,
-        stage: data.stage,
-        visibility: data.visibility,
-        updated_at: new Date(),
-      })
-      .where(eq(ideas.id, ideaId));
+  if (!user) {
+    throw new Error("You must be logged in to share an idea.");
+  }
 
-    if (data.requirements) {
-      await tx.delete(idea_requirements).where(eq(idea_requirements.idea_id, ideaId));
-      await tx.insert(idea_requirements).values(
-        data.requirements.map((req) => ({
-          idea_id: ideaId,
-          skill_id: req.skillId,
-          min_level: req.minLevel,
-          priority: req.priority,
-        }))
-      );
+  const problem = (data.problem && data.problem.trim()) || data.description;
+  const solution = (data.solution && data.solution.trim()) || data.description;
+
+  const { data: inserted, error } = await supabase
+    .from("ideas")
+    .insert({
+      title: data.title,
+      description: data.description,
+      problem: problem,
+      solution: solution,
+      category: data.category,
+      stage: "Idea",
+      visibility: "public",
+      creator_id: user.id,
+    })
+    .select("*, creator:profiles!creator_id(*)")
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message || "Failed to create idea.");
+  }
+
+  return mapIdea(inserted);
+}
+
+export async function toggleLikeIdea(id: string): Promise<{ liked: boolean; likes_count: number }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("You must be logged in to upvote an idea.");
     }
 
-    return { success: true };
-  });
-}
+    const { data: existing } = await supabase
+      .from("idea_likes")
+      .select("*")
+      .eq("idea_id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-export async function getIdeas(userId: string, filters: { category?: string; stage?: string; search?: string } = {}) {
-  const { category, stage, search } = filters;
-
-  return await db.query.ideas.findMany({
-    where: (ideas, { and, eq, ilike }) => {
-      const conditions = [];
-      if (category) conditions.push(eq(ideas.category, category));
-      if (stage) {
-  conditions.push(
-    eq(
-      ideas.stage,
-      stage as "Idea" | "Planning" | "Prototype" | "MVP" | "Testing" | "Launch"
-    )
-  );
-}
-      if (search) conditions.push(ilike(ideas.title, `%${search}%`));
-      return and(...conditions);
-    },
-    orderBy: [desc(ideas.created_at)],
-    with: {
-      creator: {
-        columns: {
-          full_name: true,
-          avatar_url: true,
-          username: true,
-        }
-      }
+    if (existing) {
+      await supabase.from("idea_likes").delete().eq("idea_id", id).eq("user_id", user.id);
+    } else {
+      await supabase.from("idea_likes").insert({ idea_id: id, user_id: user.id });
     }
-  });
-}
 
-export async function getIdeaById(ideaId: string) {
-  const idea = await db.query.ideas.findFirst({
-    where: eq(ideas.id, ideaId),
-    with: {
-      creator: true,
-      requirements: {
-        with: {
-          skill: true
-        }
-      }
-    }
-  });
-
-  if (!idea) return null;
-  return idea;
-}
-
-export async function toggleIdeaBookmark(userId: string, ideaId: string) {
-  const existing = await db.query.idea_bookmarks.findFirst({
-    where: and(eq(idea_bookmarks.user_id, userId), eq(idea_bookmarks.idea_id, ideaId)),
-  });
-
-  if (existing) {
-    await db.delete(idea_bookmarks).where(
-  and(
-    eq(idea_bookmarks.user_id, userId),
-    eq(idea_bookmarks.idea_id, ideaId)
-  )
-);
-    return { bookmarked: false };
-  } else {
-    await db.insert(idea_bookmarks).values({
-      user_id: userId,
-      idea_id: ideaId,
-    });
-    return { bookmarked: true };
+    const { data: updated } = await supabase.from("ideas").select("likes_count").eq("id", id).single();
+    return { liked: !existing, likes_count: updated?.likes_count || 0 };
+  } catch {
+    // If idea_likes table does not exist, return neutral state
+    return { liked: false, likes_count: 0 };
   }
 }
 
-export async function getMyIdeas(userId: string) {
-  return await db.query.ideas.findMany({
-    where: eq(ideas.creator_id, userId),
-    orderBy: [desc(ideas.created_at)],
-  });
+export async function addIdeaComment(ideaId: string, content: string): Promise<IdeaComment> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to post a comment.");
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("idea_comments")
+    .insert({
+      idea_id: ideaId,
+      user_id: user.id,
+      content,
+    })
+    .select("*, user:profiles(*)")
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message || "Comments are currently unavailable.");
+  }
+
+  return inserted;
+}
+
+export async function deleteIdea(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to delete an idea.");
+  }
+
+  // 1. Fetch idea to verify existence and ownership
+  const { data: idea, error: fetchErr } = await supabase
+    .from("ideas")
+    .select("id, creator_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr || !idea) {
+    throw new Error("Idea not found.");
+  }
+
+  if (idea.creator_id !== user.id) {
+    throw new Error("Unauthorized: You do not have permission to delete this idea.");
+  }
+
+  // 2. Cascade cleanup dependent records
+  await Promise.allSettled([
+    supabase.from("idea_comments").delete().eq("idea_id", id),
+    supabase.from("idea_likes").delete().eq("idea_id", id),
+    supabase.from("idea_tags").delete().eq("idea_id", id),
+    supabase.from("idea_votes").delete().eq("idea_id", id),
+  ]);
+
+  // 3. Delete the parent idea record
+  const { error: deleteErr } = await supabase
+    .from("ideas")
+    .delete()
+    .eq("id", id)
+    .eq("creator_id", user.id);
+
+  if (deleteErr) {
+    throw new Error(deleteErr.message || "Failed to delete idea.");
+  }
 }

@@ -1,54 +1,37 @@
 "use server";
 
-import {
-  getProfile,
-  updateProfile,
-  calculateProfileCompletion,
-} from "@/services/profile";
-import { ProfileFormValues } from "@/schemas/profile";
+import { updateProfile } from "@/services/profile";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 
-export async function fetchProfileAction() {
-  const supabase =await createClient();
+export async function updateProfileAction(formData: FormData) {
+  const full_name = formData.get("full_name") as string;
+  const headline = formData.get("headline") as string;
+  const bio = formData.get("bio") as string;
+  const location = formData.get("location") as string;
+  const website = formData.get("website") as string;
+  const github_url = formData.get("github_url") as string;
+  const linkedin_url = formData.get("linkedin_url") as string;
+  const rawSkills = formData.get("skills") as string;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const skills = rawSkills
+    ? rawSkills.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
 
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
+  const updated = await updateProfile({
+    full_name,
+    headline,
+    bio,
+    location,
+    website,
+    github_url,
+    linkedin_url,
+    skills,
+  });
 
-  const profile = await getProfile(user.id);
-  const completion = await calculateProfileCompletion(user.id);
-
-  return { profile, completion };
-}
-
-export async function updateProfileAction(data: ProfileFormValues) {
-  const supabase =  await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
-
-  try {
-    await updateProfile(user.id, data);
-
-    revalidatePath("/profile");
-
-    return { success: true };
-  } catch (error) {
-    console.error("Update profile error:", error);
-
-    return {
-      success: false,
-      error: "Failed to update profile",
-    };
-  }
+  revalidatePath("/profile");
+  revalidatePath("/profile/edit");
+  revalidatePath("/settings");
+  revalidatePath("/people");
+  revalidatePath("/dashboard");
+  return { success: true, profile: updated };
 }

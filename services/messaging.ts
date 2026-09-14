@@ -1,118 +1,91 @@
-import { db } from "@/db";
-import { messages, profiles } from "@/db/schema";
-import { eq, and, or, desc } from "drizzle-orm";
+import { createClient } from "@/lib/supabase/server";
+import { Message, Conversation, Profile } from "@/types";
 
-type Message = typeof messages.$inferSelect;
+export async function getConversations(): Promise<Conversation[]> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-export async function sendMessage(
-  senderId: string,
-  receiverId: string,
-  content: string
-) {
-  await db.insert(messages).values({
-    sender_id: senderId,
-    receiver_id: receiverId,
-    content,
-  });
+    if (user) {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
 
-  return { success: true };
-}
+      if (data && !error) {
+        // Group by partner
+        const convMap = new Map<string, Conversation>();
+        for (const msg of data) {
+          const isSender = msg.sender_id === user.id;
+          const partner: Profile = isSender ? msg.receiver : msg.sender;
+          if (!partner) continue;
 
-export async function getConversations(userId: string) {
-  const allMessages: Message[] = await db.query.messages.findMany({
-    where: or(
-      eq(messages.sender_id, userId),
-      eq(messages.receiver_id, userId)
-    ),
-    orderBy: [desc(messages.created_at)],
-    limit: 100,
-  });
-
-  const conversations = new Map<
-    string,
-    {
-      lastMessage: Message;
-      messages: Message[];
+          if (!convMap.has(partner.id)) {
+            convMap.set(partner.id, {
+              other_user: partner,
+              last_message: msg,
+              unread_count: !isSender && !msg.read_at ? 1 : 0,
+            });
+          } else if (!isSender && !msg.read_at) {
+            const existing = convMap.get(partner.id)!;
+            existing.unread_count += 1;
+          }
+        }
+        return Array.from(convMap.values());
+      }
     }
-  >();
-
-  allMessages.forEach((msg: Message) => {
-    const partnerId =
-      msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
-
-    if (!conversations.has(partnerId)) {
-      conversations.set(partnerId, {
-        lastMessage: msg,
-        messages: [],
-      });
-    }
-
-    conversations.get(partnerId)!.messages.push(msg);
-  });
-
-  const results: {
-    partner: typeof profiles.$inferSelect | undefined;
-    lastMessage: Message;
-    unreadCount: number;
-  }[] = [];
-
-  for (const [partnerId, data] of conversations.entries()) {
-    const profile = await db.query.profiles.findFirst({
-      where: eq(profiles.id, partnerId),
-    });
-
-    results.push({
-      partner: profile,
-      lastMessage: data.lastMessage,
-      unreadCount: data.messages.filter(
-        (m: Message) =>
-          m.receiver_id === userId && !m.is_read
-      ).length,
-    });
+  } catch (err) {
+    console.error("Error in getConversations:", err);
   }
 
-  return results.sort(
-    (a, b) =>
-      b.lastMessage.created_at.getTime() -
-      a.lastMessage.created_at.getTime()
-  );
+  return [];
 }
 
-export async function getChatMessages(
-  userId: string,
-  partnerId: string
-) {
-  return await db.query.messages.findMany({
-    where: and(
-      or(
-        and(
-          eq(messages.sender_id, userId),
-          eq(messages.receiver_id, partnerId)
-        ),
-        and(
-          eq(messages.sender_id, partnerId),
-          eq(messages.receiver_id, userId)
+export async function getMessages(otherUserId: string): Promise<Message[]> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+        .or(
+          `and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`
         )
-      )
-    ),
-    orderBy: [desc(messages.created_at)],
-  });
+        .order("created_at", { ascending: true });
+
+      if (data && !error) return data;
+    }
+  } catch (err) {
+    console.error("Error in getMessages:", err);
+  }
+
+  return [];
 }
 
-export async function markMessagesAsRead(
-  userId: string,
-  partnerId: string
-) {
-  await db
-    .update(messages)
-    .set({ is_read: true })
-    .where(
-      and(
-        eq(messages.receiver_id, userId),
-        eq(messages.sender_id, partnerId),
-        eq(messages.is_read, false)
-      )
-    );
+export async function sendMessage(receiverId: string, content: string): Promise<Message> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return { success: true };
+  if (!user) {
+    throw new Error("You must be logged in to send a message.");
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("messages")
+    .insert({
+      sender_id: user.id,
+      receiver_id: receiverId,
+      content,
+    })
+    .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message || "Failed to send message.");
+  }
+
+  return inserted;
 }

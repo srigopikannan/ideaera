@@ -1,19 +1,51 @@
-import * as React from "react"
-import { Input as InputPrimitive } from "@base-ui/react/input"
-import { cn } from "cn"
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
-  return (
-    <InputPrimitive
-      type={type}
-      data-slot="input"
-      className={cn(
-        "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    />
-  )
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  error?: string;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 }
 
-export { Input }
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, error, leftIcon, rightIcon, ...props }, ref) => {
+    return (
+      <div className="w-full relative">
+        {leftIcon && (
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none flex items-center">
+            {leftIcon}
+          </div>
+        )}
+        <input
+          type={type}
+          className={cn(
+            "flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-foreground shadow-subtle transition-all duration-150",
+            "placeholder:text-muted-foreground/60",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            leftIcon && "pl-10",
+            rightIcon && "pr-10",
+            error && "border-error focus-visible:ring-error text-error-foreground",
+            className
+          )}
+          ref={ref}
+          {...props}
+        />
+        {rightIcon && (
+          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground flex items-center">
+            {rightIcon}
+          </div>
+        )}
+        {error && (
+          <p className="mt-1 text-xs font-medium text-error flex items-center gap-1">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+);
+Input.displayName = "Input";
+
+export { Input };

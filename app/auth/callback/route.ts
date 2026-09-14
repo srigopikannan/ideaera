@@ -1,33 +1,27 @@
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const origin = requestUrl.origin;
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=missing_code`);
-  }
-
-  try {
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-      console.error("Auth callback error:", error);
-
-      return NextResponse.redirect(
-        `${origin}/login?error=confirmation_failed`
-      );
+  if (code) {
+    try {
+      const supabase = await createClient();
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error("Auth callback error:", error.message);
+        return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
+      }
+      // Successful authentication redirect to profile
+      return NextResponse.redirect(`${origin}/profile`);
+    } catch (err: any) {
+      console.error("Auth callback unexpected error:", err);
+      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("Authentication exchange failed.")}`);
     }
-
-    return NextResponse.redirect(`${origin}/profile`);
-  } catch (error) {
-    console.error("Auth callback exception:", error);
-
-    return NextResponse.redirect(
-      `${origin}/login?error=confirmation_failed`
-    );
   }
+
+  // URL to redirect to after sign in process completes
+  return NextResponse.redirect(`${origin}/profile`);
 }

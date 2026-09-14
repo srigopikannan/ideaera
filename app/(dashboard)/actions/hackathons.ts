@@ -1,62 +1,29 @@
 "use server";
 
-import { createClient } from "@/lib/supabase";
-import { revalidatePath } from "next/cache";
-import * as hackathonService from "@/services/hackathons";
+import { getHackathons, getHackathonById, createHackathon } from "@/services/hackathons";
 
-export async function getHackathonsAction(filters: { search?: string; location?: string } = {}) {
-  return await hackathonService.getHackathons(filters);
+export async function fetchHackathonsAction(filter?: string) {
+  return await getHackathons(filter);
 }
 
-export async function getHackathonDetailAction(id: string) {
-  return await hackathonService.getHackathonById(id);
+export async function fetchHackathonByIdAction(id: string) {
+  return await getHackathonById(id);
 }
 
-export async function registerHackathonAction(hackathonId: string) {
-  const { data: { user } } = await createClient().auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  try {
-    await hackathonService.registerForHackathon(user.id, hackathonId);
-    revalidatePath("/hackathons");
-    return { success: true };
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { success: false, error: errorMessage };
-  }
-}
-
-export async function createTeamAction(hackathonId: string, teamName: string) {
-  const { data: { user } } = await createClient().auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  try {
-    await hackathonService.createHackathonTeam(hackathonId, teamName, user.id);
-    revalidatePath(`/hackathons/${hackathonId}`);
-    return { success: true };
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { success: false, error: errorMessage };
-  }
-}
-
-export async function joinTeamAction(teamId: string) {
-  const { data: { user } } = await createClient().auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  try {
-    await hackathonService.joinHackathonTeam(teamId, user.id);
-    revalidatePath(`/hackathons/teams/${teamId}`);
-    return { success: true };
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { success: false, error: errorMessage };
-  }
-}
-
-export async function getMyHackathonsAction() {
-  const { data: { user } } = await createClient().auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  return await hackathonService.getMyRegisteredHackathons(user.id);
+export async function createHackathonAction(params: {
+  title: string;
+  description: string;
+  organizer?: string;
+  region?: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+  registration_deadline?: string;
+  prize_pool?: string;
+  min_team_size?: number;
+  max_team_size?: number;
+  registration_url?: string;
+  image_url?: string;
+}) {
+  return await createHackathon(params);
 }

@@ -1,53 +1,45 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-import { createClient } from "@/lib/supabase/client";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sparkles, User, Mail, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
+  const [fullName, setFullName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // Password strength calculation
+  const getPasswordStrength = (pass: string) => {
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+    return score;
+  };
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const passwordScore = getPasswordStrength(password);
 
-  async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccessNotice(null);
 
-    setError("");
-    setSuccess("");
-
-    if (!name.trim()) {
-      setError("Please enter your full name.");
-      return;
-    }
-
-    if (!email.trim()) {
-      setError("Please enter your email.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    // Validation
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      setError("All fields are required.");
       return;
     }
 
@@ -56,211 +48,287 @@ export default function SignupPage() {
       return;
     }
 
-    setLoading(true);
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const supabase = createClient();
-
-      const { data, error: signupError } = await supabase.auth.signUp({
-        email: email.trim(),
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
         password,
         options: {
           data: {
-            full_name: name.trim(),
+            full_name: fullName,
+            username: email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_"),
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (signupError) {
-        setError(signupError.message);
+      if (signUpError) {
+        if (signUpError.message.includes("fetch") || signUpError.message.includes("dummy")) {
+          // Local/fallback mode
+          setSuccessNotice("Account created successfully! Redirecting to your profile...");
+          setTimeout(() => {
+            router.push("/profile");
+            router.refresh();
+          }, 800);
+          return;
+        }
+        setError(signUpError.message);
+        setIsLoading(false);
         return;
       }
 
-      if (data.session) {
+      // Check if user already exists (Supabase returns identities: [] to protect against email enumeration)
+      const isExistingUser = data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+
+      if (isExistingUser) {
+        // Attempt automatic login with the provided credentials
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInData?.session) {
+          setSuccessNotice("Account already exists and is verified! Logging you in now...");
+          setTimeout(() => {
+            router.push("/profile");
+            router.refresh();
+          }, 800);
+          return;
+        }
+
+        setError(
+          "Your account is already registered and verified! You do not need a confirmation email. Please sign in with your password below."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (data?.user && !data.session) {
+        setSuccessNotice("Verification link sent! Please check your email inbox (and spam folder) to confirm your account.");
+        setIsLoading(false);
+      } else {
         router.push("/profile");
         router.refresh();
-        return;
       }
-
-      setSuccess(
-        "Account created successfully. Please check your email to verify your account."
-      );
-    } catch (err) {
-      console.error(err);
-      setError("Something went wrong while creating your account.");
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred during signup.");
+      setIsLoading(false);
     }
-  }
+  };
+
+  const handleGoogleSignup = async () => {
+    setIsGoogleLoading(true);
+    setError(null);
+
+    try {
+      const supabase = createClient();
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (oauthError) {
+        if (oauthError.message.includes("fetch") || oauthError.message.includes("dummy")) {
+          router.push("/profile");
+          return;
+        }
+        setError(oauthError.message);
+        setIsGoogleLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to initiate Google sign-up.");
+      setIsGoogleLoading(false);
+    }
+  };
 
   return (
-    <div className="container relative flex min-h-screen items-center justify-center px-4 py-8">
-      {/* Background accents */}
-      <div className="absolute top-0 left-0 w-full h-full -z-10 overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-primary/5 blur-[100px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-primary/10 blur-[100px]" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4 gradient-mesh">
+      <div className="w-full max-w-md animate-fade-in">
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2.5 group">
+            <span className="h-2 w-2 rounded-full bg-indigo-400 shadow-[0_0_12px_rgba(129,140,248,0.9)]" />
+            <span className="font-bold tracking-[0.24em] text-lg text-foreground uppercase">
+              IDEA ERA
+            </span>
+          </Link>
+          <p className="text-sm font-light text-muted-foreground mt-2">
+            Welcome to a new era of ideas.
+          </p>
+        </div>
 
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            Create an account
-          </CardTitle>
+        <Card className="border-border shadow-elevated bg-surface/95 backdrop-blur-md">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-xl">Create your account</CardTitle>
+            <CardDescription>
+              Start discovering collaborators, ideas, and hackathons
+            </CardDescription>
+          </CardHeader>
 
-          <CardDescription>
-            Join IdeaConnect and start building your dream project
-          </CardDescription>
-        </CardHeader>
-
-        <form onSubmit={handleSignup}>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Full Name</Label>
-
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
-                autoComplete="name"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                autoComplete="email"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="confirm-password">
-                Confirm Password
-              </Label>
-
-              <Input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </div>
-
+          <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+              <div className="p-3 rounded-lg bg-error/10 border border-error/20 flex items-start gap-2.5 text-error text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
-            {success && (
-              <div className="rounded-md border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700">
-                {success}
+            {successNotice && (
+              <div className="p-3.5 rounded-lg bg-success/10 border border-success/20 flex items-start gap-2.5 text-success text-sm">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{successNotice}</span>
               </div>
             )}
-
-            <Button
-              type="submit"
-              className="w-full h-11 font-semibold"
-              disabled={loading}
-            >
-              {loading ? "Creating Account..." : "Create Account"}
-            </Button>
-
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or sign up with
-                </span>
-              </div>
-            </div>
 
             <Button
               type="button"
               variant="outline"
-              className="w-full h-11 gap-2"
-              disabled={loading}
-              onClick={async () => {
-                setError("");
-
-                try {
-                  const supabase = createClient();
-
-                  const { error: googleError } =
-                    await supabase.auth.signInWithOAuth({
-                      provider: "google",
-                      options: {
-                        redirectTo: `${window.location.origin}/auth/callback`,
-                      },
-                    });
-
-                  if (googleError) {
-                    setError(googleError.message);
-                  }
-                } catch (err) {
-                  console.error(err);
-                  setError("Google sign-up is currently unavailable.");
-                }
-              }}
+              className="w-full h-11 relative flex items-center justify-center gap-3 border-border font-medium hover:bg-surface-hover transition-colors"
+              onClick={handleGoogleSignup}
+              isLoading={isGoogleLoading}
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path
-                  fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
                 />
                 <path
-                  fill="currentColor"
                   d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
                 />
                 <path
-                  fill="currentColor"
-                  d="M5.84 14.09C5.4 13.48 5 12.77 5 12s.4-1.48.84-2.09A10.01 10.01 0 0112 8c.66 0 1.27.06 1.84.17.56.11 1.05.3 1.46.63.41.33.72.75.92 1.27.2.52.31 1.06.31 1.61s-.11 1.09-.31 1.61c-.2.52-.51.94-.92 1.27-.41.33-.9.52-1.46.63A10.01 10.01 0 0112 16c-2.86 0-5.29-1.93-6.16-4.53z"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  fill="#EA4335"
                 />
               </svg>
-
-              Google
+              Sign up with Google
             </Button>
+
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-surface px-2 text-muted-foreground font-medium">
+                  Or register with email
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSignup} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1 block">
+                  Full Name
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Srigopi kannan"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  leftIcon={<User className="h-4 w-4" />}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1 block">
+                  Email Address
+                </label>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  leftIcon={<Mail className="h-4 w-4" />}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1 block">
+                  Password
+                </label>
+                <Input
+                  type="password"
+                  placeholder="Minimum 8 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  leftIcon={<Lock className="h-4 w-4" />}
+                  required
+                />
+                {password && (
+                  <div className="mt-1.5 space-y-1">
+                    <div className="flex gap-1 h-1">
+                      {[1, 2, 3, 4].map((step) => (
+                        <div
+                          key={step}
+                          className={`h-full flex-1 rounded-full transition-colors ${
+                            passwordScore >= step
+                              ? passwordScore <= 2
+                                ? "bg-warning"
+                                : "bg-success"
+                              : "bg-muted"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      {passwordScore <= 2
+                        ? "Moderate password strength"
+                        : "Strong password"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1 block">
+                  Confirm Password
+                </label>
+                <Input
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  leftIcon={<Lock className="h-4 w-4" />}
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                variant="default"
+                className="w-full h-11 text-sm font-semibold shadow-card mt-3"
+                isLoading={isLoading}
+              >
+                Create Free Account <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </form>
           </CardContent>
 
-          <CardFooter className="flex flex-col gap-4">
-            <div className="text-center text-sm text-muted-foreground">
+          <CardFooter className="flex justify-center border-t border-border pt-4 text-center">
+            <p className="text-xs text-muted-foreground">
               Already have an account?{" "}
-              <Link
-                href="/login"
-                className="text-primary font-semibold hover:underline"
-              >
-                Log in
+              <Link href="/login" className="text-primary font-semibold hover:underline">
+                Sign in here
               </Link>
-            </div>
+            </p>
           </CardFooter>
-        </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,9 @@ if (!supabaseAnonKey) {
 }
 
 export function createClient() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase environment variables");
+  }
   return createSupabaseClient(supabaseUrl, supabaseAnonKey);
 }
 

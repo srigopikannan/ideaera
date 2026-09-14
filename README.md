@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# IdeaEra 💬✨
 
-## Getting Started
+> A WhatsApp-inspired messaging application with AI-powered group chat summarization.
 
-First, run the development server:
+IdeaEra is a medium-sized messaging application designed to make large group conversations easier to understand. It provides a familiar chat experience while using AI to extract the most important information from long conversations.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 💬 Messaging
+- WhatsApp-inspired chat interface
+- Individual and group conversations
+- Realistic message history
+- Message timestamps
+- Multiple chat participants
+- Smooth chat navigation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🤖 AI-Powered Chat Summarization
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+IdeaEra can analyze a large group conversation and generate a structured summary.
 
-## Learn More
+The AI summary includes:
 
-To learn more about Next.js, take a look at the following resources:
+- **What is this chat about?**
+- **Key Topics**
+- **Important Dates**
+- **Important Venue**
+- **Important Information**
+- **Questions**
+- **Decisions Made**
+- **Action Items**
+- **Upcoming Schedule**
+- **Other Things to Know**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 🔎 Source Message Linking
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Every important piece of information extracted from the conversation is connected to its original message.
 
-## Deploy on Vercel
+Clicking **View Source** takes the user directly to the original message and highlights it.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This makes the AI summary:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Easier to verify
+- More transparent
+- More useful for large conversations
+
+### 📊 Realistic Group Dataset
+
+The project includes a realistic college project group conversation containing:
+
+- **427 messages**
+- **6 participants**
+- **5 days of conversation**
+- Multiple discussions, questions, decisions, deadlines and action items
+
+## 🧠 How It Works
+
+The basic flow is:
+
+```text
+User opens IdeaEra
+        ↓
+Login / Entry
+        ↓
+Chat Home
+        ↓
+Open a conversation
+        ↓
+Select a group chat
+        ↓
+Click "✨ Use AI to Summarize"
+        ↓
+AI processing
+        ↓
+Structured Chat Summary
+        ↓
+Click "View Source"
+        ↓
+Original message is highlighted

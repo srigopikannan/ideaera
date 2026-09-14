@@ -23,6 +23,8 @@ import NextLink from "next/link";
 import { notFound } from "next/navigation";
 import BookmarkClientButton from "@/components/ideas/bookmark-button";
 
+export const dynamic = "force-dynamic";
+
 export default async function IdeaDetailPage({
   params,
 }: {

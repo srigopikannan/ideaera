@@ -6,6 +6,8 @@ import NextLink from "next/link";
 import { Trophy, Calendar, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
+export const dynamic = "force-dynamic";
+
 export default async function HackathonsPage({
   searchParams,
 }: {

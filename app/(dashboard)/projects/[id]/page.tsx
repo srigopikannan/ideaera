@@ -59,6 +59,8 @@ function getInitial(value: unknown): string {
 return getName(value).charAt(0).toUpperCase() || "?";
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function ProjectWorkspacePage({
 params,
 }: {

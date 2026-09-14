@@ -12,6 +12,8 @@ import { Globe, MapPin, Briefcase, Send } from "lucide-react";
 import NextLink from "next/link";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default async function CompanyDetailPage({
   params,
 }: {

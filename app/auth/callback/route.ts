@@ -4,7 +4,12 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const origin = requestUrl.origin;
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestUrl.origin || "https://ideaera.vercel.app");
 
   const redirectedFrom = requestUrl.searchParams.get("redirectedFrom") || "/dashboard";
   const targetPath = redirectedFrom.startsWith("/") ? redirectedFrom : "/dashboard";

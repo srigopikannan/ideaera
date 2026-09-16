@@ -120,18 +120,20 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient();
+      const origin =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "https://ideaera.vercel.app");
+
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${origin}/auth/callback`,
         },
       });
 
       if (oauthError) {
-        if (oauthError.message.includes("fetch") || oauthError.message.includes("dummy")) {
-          router.push("/profile");
-          return;
-        }
         setError(oauthError.message);
         setIsGoogleLoading(false);
       }

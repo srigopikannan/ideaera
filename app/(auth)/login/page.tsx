@@ -54,10 +54,16 @@ function LoginForm() {
     try {
       const supabase = createClient();
       const destination = searchParams.get("redirectedFrom") || "/dashboard";
+      const origin =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "https://ideaera.vercel.app");
+
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirectedFrom=${encodeURIComponent(destination)}`,
+          redirectTo: `${origin}/auth/callback?redirectedFrom=${encodeURIComponent(destination)}`,
         },
       });
 

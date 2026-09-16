@@ -1,16 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const REAL_SUPABASE_URL = "https://jhmnemzgbcwcryzolzbz.supabase.co";
+const REAL_SUPABASE_ANON_KEY = "sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD";
+
 export default async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key";
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    REAL_SUPABASE_URL;
 
-  // Only attempt session refresh if actual Supabase url is provided
-  if (!supabaseUrl.includes("placeholder")) {
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    REAL_SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseAnonKey) {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
@@ -46,7 +56,7 @@ export default async function proxy(request: NextRequest) {
       request.nextUrl.pathname.startsWith("/match") ||
       request.nextUrl.pathname.startsWith("/settings");
 
-    if (!user && isDashboardRoute && process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+    if (!user && isDashboardRoute) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("redirectedFrom", request.nextUrl.pathname);

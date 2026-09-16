@@ -1,6 +1,8 @@
 import { getConversations, getMessages } from "@/services/messaging";
 import { MessagingInterface } from "@/components/messages/MessagingInterface";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Messages — IdeaEra",
   description: "Direct communications with collaborators and creators.",

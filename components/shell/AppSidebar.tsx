@@ -50,12 +50,13 @@ const accountNav: NavItem[] = [
 export function AppSidebar() {
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = React.useState<{
+    id?: string;
     name: string;
     username: string;
     avatar_url?: string | null;
   }>({
-    name: "Innovator",
-    username: "innovator",
+    name: "Explorer",
+    username: "explorer",
   });
 
   React.useEffect(() => {
@@ -63,22 +64,34 @@ export function AppSidebar() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
-        const targetId = user?.id || "d1aabec0-3b89-4c1d-a33d-a6573224f5c2";
 
-        if (targetId) {
+        if (user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("full_name, username, avatar_url")
-            .eq("id", targetId)
+            .select("id, full_name, username, avatar_url")
+            .eq("id", user.id)
             .maybeSingle();
 
           if (profile) {
             setCurrentUser({
+              id: profile.id,
               name: profile.full_name || "Innovator",
               username: profile.username || "innovator",
               avatar_url: profile.avatar_url,
             });
+          } else {
+            setCurrentUser({
+              id: user.id,
+              name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Innovator",
+              username: user.user_metadata?.username || user.email?.split("@")[0] || "innovator",
+              avatar_url: user.user_metadata?.avatar_url,
+            });
           }
+        } else {
+          setCurrentUser({
+            name: "Explorer",
+            username: "guest",
+          });
         }
       } catch {}
     };
@@ -208,7 +221,7 @@ export function AppSidebar() {
       {/* User Footer */}
       <div className="p-4 border-t border-white/[0.08]">
         <Link
-          href="/profile"
+          href={currentUser.id ? "/profile" : "/login"}
           className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.04] transition-colors group"
         >
           <div className="h-8 w-8 rounded-full overflow-hidden bg-indigo-500/15 border border-white/10 flex items-center justify-center text-indigo-300 text-xs font-semibold">

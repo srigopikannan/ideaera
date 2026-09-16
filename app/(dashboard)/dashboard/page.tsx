@@ -3,6 +3,8 @@ import { getIdeas } from "@/services/ideas";
 import { getHackathons } from "@/services/hackathons";
 import { LivingIdeaSpace } from "@/components/dashboard/LivingIdeaSpace";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const [currentUser, people, ideas, hackathons] = await Promise.all([
     getCurrentUserProfile(),

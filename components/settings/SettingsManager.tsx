@@ -25,13 +25,19 @@ export function SettingsManager() {
   const router = useRouter();
   const [activeTab, setActiveTab] = React.useState("account");
   const [isDark, setIsDark] = React.useState(false);
-  const [userEmail, setUserEmail] = React.useState("srigopikannan11@gmail.com");
+  const [userEmail, setUserEmail] = React.useState("");
 
   // Notification toggles
   const [emailNotifs, setEmailNotifs] = React.useState(true);
   const [connectionNotifs, setConnectionNotifs] = React.useState(true);
   const [messageNotifs, setMessageNotifs] = React.useState(true);
   const [savedSuccess, setSavedSuccess] = React.useState(false);
+
+  // Security password state
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordLoading, setPasswordLoading] = React.useState(false);
+  const [passwordMsg, setPasswordMsg] = React.useState<{ error?: string; success?: string } | null>(null);
 
   React.useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"));
@@ -74,6 +80,38 @@ export function SettingsManager() {
       // Ignore
     }
     router.push("/login");
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordMsg({ error: "Password must be at least 6 characters long." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ error: "Passwords do not match." });
+      return;
+    }
+
+    setPasswordLoading(true);
+    setPasswordMsg(null);
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordMsg({ error: error.message });
+      } else {
+        setPasswordMsg({ success: "Password successfully updated!" });
+        setNewPassword("");
+        setConfirmPassword("");
+        setTimeout(() => setPasswordMsg(null), 4000);
+      }
+    } catch (err: any) {
+      setPasswordMsg({ error: err?.message || "Failed to update password." });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   return (
@@ -239,11 +277,72 @@ export function SettingsManager() {
         </TabsContent>
 
         {/* Tab 4: Security & Privacy */}
-        <TabsContent value="security">
+        <TabsContent value="security" className="space-y-6">
+          {/* Change Password Card */}
+          <Card className="border-border bg-surface shadow-card">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" /> Update Password
+              </CardTitle>
+              <CardDescription>
+                Ensure your account is protected with a secure password.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md">
+                {passwordMsg?.error && (
+                  <div className="p-3 rounded-xl bg-error/10 border border-error/20 text-xs text-error font-mono">
+                    {passwordMsg.error}
+                  </div>
+                )}
+                {passwordMsg?.success && (
+                  <div className="p-3 rounded-xl bg-success/10 border border-success/20 text-xs text-success font-mono flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{passwordMsg.success}</span>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                    New Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    disabled={passwordLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                    Confirm New Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    disabled={passwordLoading}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="sm"
+                  disabled={passwordLoading}
+                >
+                  {passwordLoading ? "Updating..." : "Update Password"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
           <Card className="border-border bg-surface shadow-card space-y-4">
             <CardHeader className="border-b border-border pb-4">
               <CardTitle className="text-lg">Security & Authentication</CardTitle>
-              <CardDescription>Manage password and session security.</CardDescription>
+              <CardDescription>Manage session security and active sign-ins.</CardDescription>
             </CardHeader>
             <CardContent className="pt-4 space-y-6">
               <div className="space-y-3">

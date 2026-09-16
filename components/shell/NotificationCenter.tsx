@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Notification } from "@/types";
 import {
   getNotificationsAction,
@@ -22,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export function NotificationCenter() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
@@ -48,6 +50,27 @@ export function NotificationCenter() {
     await markNotificationReadAction(id);
   };
 
+  const handleNotificationClick = async (n: Notification) => {
+    if (!n.read) {
+      handleMarkAsRead(n.id);
+    }
+    setIsOpen(false);
+
+    if (n.type === "idea_like" || n.type === "idea_comment") {
+      if (n.related_id) router.push(`/ideas/${n.related_id}`);
+      else router.push("/ideas");
+    } else if (n.type === "project_invite" || n.type === "project_joined") {
+      if (n.related_id) router.push(`/projects/${n.related_id}`);
+      else router.push("/projects");
+    } else if (n.type === "connection_request" || n.type === "connection_accepted") {
+      router.push("/connections");
+    } else if (n.type === "message") {
+      router.push("/messages");
+    } else if (n.related_id) {
+      router.push(`/ideas/${n.related_id}`);
+    }
+  };
+
   const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     await markAllNotificationsReadAction();
@@ -64,6 +87,7 @@ export function NotificationCenter() {
       case "idea_comment":
         return <MessageCircle className="h-3.5 w-3.5 text-indigo-400" />;
       case "project_invite":
+      case "project_joined":
         return <FolderGit2 className="h-3.5 w-3.5 text-amber-400" />;
       default:
         return <Activity className="h-3.5 w-3.5 text-neutral-400" />;
@@ -129,7 +153,7 @@ export function NotificationCenter() {
               notifications.map((n) => (
                 <div
                   key={n.id}
-                  onClick={() => !n.read && handleMarkAsRead(n.id)}
+                  onClick={() => handleNotificationClick(n)}
                   className={cn(
                     "p-4 flex items-start gap-3.5 hover:bg-white/[0.04] transition-colors cursor-pointer",
                     !n.read && "bg-indigo-500/[0.05]"

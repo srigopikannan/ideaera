@@ -1,6 +1,12 @@
 "use server";
 
-import { createProject, deleteProject } from "@/services/projects";
+import {
+  createProject,
+  updateProject,
+  deleteProject,
+  joinProject,
+  leaveProject,
+} from "@/services/projects";
 import { revalidatePath } from "next/cache";
 
 export async function createProjectAction(formData: FormData) {
@@ -37,6 +43,76 @@ export async function createProjectAction(formData: FormData) {
   } catch (err: any) {
     console.error("Error in createProjectAction:", err);
     return { error: err?.message || "Failed to create project. Please try again." };
+  }
+}
+
+export async function updateProjectAction(formData: FormData) {
+  try {
+    const id = formData.get("id") as string;
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const repository_url = formData.get("repository_url") as string;
+    const website_url = formData.get("website_url") as string;
+    const image_url = formData.get("image_url") as string;
+    const status = (formData.get("status") as any) || "in_development";
+    const rawTech = formData.get("technologies") as string;
+
+    if (!id) {
+      return { error: "Project ID is required." };
+    }
+
+    if (!name || !description) {
+      return { error: "Project name and description are required." };
+    }
+
+    const technologies = rawTech
+      ? rawTech.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
+
+    const project = await updateProject(id, {
+      name,
+      description,
+      repository_url,
+      website_url,
+      image_url,
+      status,
+      technologies,
+    });
+
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${id}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    return { success: true, project };
+  } catch (err: any) {
+    console.error("Error in updateProjectAction:", err);
+    return { error: err?.message || "Failed to update project. Please try again." };
+  }
+}
+
+export async function joinProjectAction(projectId: string, role: string = "Collaborator") {
+  try {
+    if (!projectId) return { error: "Project ID is required." };
+    const res = await joinProject(projectId, role);
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects");
+    return { success: true, message: res.message };
+  } catch (err: any) {
+    console.error("Error in joinProjectAction:", err);
+    return { error: err?.message || "Failed to join project." };
+  }
+}
+
+export async function leaveProjectAction(projectId: string) {
+  try {
+    if (!projectId) return { error: "Project ID is required." };
+    await leaveProject(projectId);
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error in leaveProjectAction:", err);
+    return { error: err?.message || "Failed to leave project." };
   }
 }
 

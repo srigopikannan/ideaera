@@ -70,15 +70,6 @@ export default function SignupPage() {
       });
 
       if (signUpError) {
-        if (signUpError.message.includes("fetch") || signUpError.message.includes("dummy")) {
-          // Local/fallback mode
-          setSuccessNotice("Account created successfully! Redirecting to your profile...");
-          setTimeout(() => {
-            router.push("/profile");
-            router.refresh();
-          }, 800);
-          return;
-        }
         setError(signUpError.message);
         setIsLoading(false);
         return;

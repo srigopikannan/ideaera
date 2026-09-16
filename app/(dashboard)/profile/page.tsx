@@ -4,6 +4,8 @@ import { getIdeas } from "@/services/ideas";
 import { getAllProfiles } from "@/services/profile";
 import { ProfileView } from "@/components/profile/ProfileView";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Your Profile — IdeaEra",
   description: "View and manage your IdeaEra professional profile.",

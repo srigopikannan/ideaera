@@ -63,6 +63,7 @@ export async function getIdeas(
 export async function getIdeaById(id: string): Promise<Idea | null> {
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error } = await supabase
       .from("ideas")
@@ -71,7 +72,21 @@ export async function getIdeaById(id: string): Promise<Idea | null> {
       .maybeSingle();
 
     if (data && !error) {
-      return mapIdea(data, false);
+      let isLiked = false;
+      if (user) {
+        try {
+          const { data: likeRow } = await supabase
+            .from("idea_likes")
+            .select("idea_id")
+            .eq("idea_id", id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          isLiked = Boolean(likeRow);
+        } catch {
+          // table may not exist
+        }
+      }
+      return mapIdea(data, isLiked);
     }
   } catch (err) {
     console.error("Error in getIdeaById:", err);
@@ -135,6 +150,64 @@ export async function createIdea(data: {
   }
 
   return mapIdea(inserted);
+}
+
+export async function updateIdea(
+  id: string,
+  data: {
+    title: string;
+    description: string;
+    category: string;
+    tags: string[];
+    problem?: string;
+    solution?: string;
+  }
+): Promise<Idea> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to update an idea.");
+  }
+
+  // 1. Fetch idea to verify existence and ownership
+  const { data: idea, error: fetchErr } = await supabase
+    .from("ideas")
+    .select("id, creator_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr || !idea) {
+    throw new Error("Idea not found.");
+  }
+
+  if (idea.creator_id !== user.id) {
+    throw new Error("Unauthorized: You do not have permission to edit this idea.");
+  }
+
+  const problem = (data.problem && data.problem.trim()) || data.description;
+  const solution = (data.solution && data.solution.trim()) || data.description;
+
+  const { data: updated, error } = await supabase
+    .from("ideas")
+    .update({
+      title: data.title.trim(),
+      description: data.description.trim(),
+      problem,
+      solution,
+      category: data.category,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("creator_id", user.id)
+    .select("*, creator:profiles!creator_id(*)")
+    .single();
+
+  if (error || !updated) {
+    throw new Error(error?.message || "Failed to update idea.");
+  }
+
+  return mapIdea(updated);
 }
 
 export async function toggleLikeIdea(id: string): Promise<{ liked: boolean; likes_count: number }> {

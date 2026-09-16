@@ -4,6 +4,8 @@ import { CompaniesExplorer } from "@/components/companies/CompaniesExplorer";
 import { Button } from "@/components/ui/button";
 import { Building2, Plus } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Company Discovery — IdeaEra",
   description: "Explore innovative technology startups and deep-tech companies.",

@@ -41,36 +41,36 @@ export async function getCurrentUserProfile(): Promise<Profile> {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    let userId = user?.id || "d1aabec0-3b89-4c1d-a33d-a6573224f5c2";
+    if (!user) {
+      return GUEST_PROFILE;
+    }
 
-    if (userId) {
-      let { data, error } = await supabase
+    let { data, error } = await supabase
+      .from("profiles")
+      .select("*, user_skills(*, skill:skills(*))")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!data) {
+      const username = user.user_metadata?.username || user.email?.split("@")[0] || `user_${user.id.substring(0, 6)}`;
+      const fullName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Innovator";
+      const { data: createdProfile } = await supabase
         .from("profiles")
+        .upsert({
+          id: user.id,
+          username,
+          full_name: fullName,
+          headline: "Innovator & Creator on IdeaEra",
+          bio: "Passionate about turning innovative concepts into impactful technology products.",
+          avatar_url: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.id}`,
+        })
         .select("*, user_skills(*, skill:skills(*))")
-        .eq("id", userId)
-        .maybeSingle();
+        .single();
+      data = createdProfile;
+    }
 
-      if (!data && user) {
-        const username = user.user_metadata?.username || user.email?.split("@")[0] || `user_${user.id.substring(0, 6)}`;
-        const fullName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Innovator";
-        const { data: createdProfile } = await supabase
-          .from("profiles")
-          .upsert({
-            id: user.id,
-            username,
-            full_name: fullName,
-            headline: "Innovator & Creator on IdeaEra",
-            bio: "Passionate about turning innovative concepts into impactful technology products.",
-            avatar_url: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.id}`,
-          })
-          .select("*, user_skills(*, skill:skills(*))")
-          .single();
-        data = createdProfile;
-      }
-
-      if (data) {
-        return formatProfile(data);
-      }
+    if (data) {
+      return formatProfile(data);
     }
   } catch (err) {
     console.error("Error in getCurrentUserProfile:", err);
@@ -102,7 +102,7 @@ export async function getAllProfiles(query?: string, skillFilter?: string): Prom
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const currentUserId = user?.id || "d1aabec0-3b89-4c1d-a33d-a6573224f5c2";
+    const currentUserId = user?.id;
 
     let queryBuilder = supabase.from("profiles").select("*, user_skills(*, skill:skills(*))");
 
@@ -138,15 +138,11 @@ export async function updateProfile(profileData: Partial<Profile> & { website?: 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  let userId = user?.id;
-  if (!userId) {
-    const { data: profiles } = await supabase.from("profiles").select("id").limit(1);
-    userId = profiles?.[0]?.id;
+  if (!user) {
+    throw new Error("You must be logged in to update your profile.");
   }
 
-  if (!userId) {
-    throw new Error("User must be authenticated to update profile.");
-  }
+  const userId = user.id;
 
   // Only update columns that exist on the Supabase profiles table
   const updatePayload: Record<string, any> = {

@@ -2,6 +2,8 @@ import { getIdeas } from "@/services/ideas";
 import { IdeasExplorer } from "@/components/ideas/IdeasExplorer";
 import { IdeaFieldAtmosphere } from "@/components/ideas/IdeaFieldAtmosphere";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Discover Ideas — Idea Era",
   description: "Explore the living idea universe and observe resonance in 3D coordinate space.",

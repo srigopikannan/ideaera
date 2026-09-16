@@ -82,7 +82,27 @@ export async function getProjectBySlug(slug: string): Promise<Project | null> {
 
     const { data, error } = await qb.maybeSingle();
     if (data && !error) {
-      return mapProject(data);
+      const mapped = mapProject(data);
+      try {
+        const { data: membersData } = await supabase
+          .from("project_members")
+          .select("*, user:profiles!user_id(*)")
+          .eq("project_id", data.id)
+          .order("joined_at", { ascending: true });
+
+        if (membersData) {
+          mapped.members = membersData.map((m: any) => ({
+            project_id: m.project_id,
+            user_id: m.user_id,
+            role: m.role || "Collaborator",
+            joined_at: m.joined_at,
+            user: m.user || undefined,
+          }));
+        }
+      } catch (membersErr) {
+        console.error("Error fetching project members:", membersErr);
+      }
+      return mapped;
     }
   } catch (err) {
     console.error("Error in getProjectBySlug:", err);
@@ -178,4 +198,160 @@ export async function deleteProject(id: string): Promise<void> {
   if (deleteErr) {
     throw new Error(deleteErr.message || "Failed to delete project.");
   }
+}
+
+export async function updateProject(
+  id: string,
+  data: {
+    name: string;
+    description: string;
+    repository_url?: string;
+    website_url?: string;
+    technologies: string[];
+    image_url?: string;
+    status?: "idea" | "in_development" | "beta" | "launched";
+  }
+): Promise<Project> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to update a project.");
+  }
+
+  // Verify ownership
+  const { data: existing, error: fetchErr } = await supabase
+    .from("projects")
+    .select("id, owner_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr || !existing) {
+    throw new Error("Project not found.");
+  }
+
+  if (existing.owner_id !== user.id) {
+    throw new Error("Unauthorized: Only the project architect can modify this project.");
+  }
+
+  let packedDescription = data.description;
+  if (data.technologies && data.technologies.length > 0) {
+    packedDescription = `[Tech: ${data.technologies.join(", ")}] ${packedDescription}`;
+  }
+  if (data.image_url && data.image_url.trim()) {
+    packedDescription = `[Image: ${data.image_url.trim()}] ${packedDescription}`;
+  }
+
+  const { data: updated, error } = await supabase
+    .from("projects")
+    .update({
+      name: data.name.trim(),
+      description: packedDescription,
+      repository_url: data.repository_url?.trim() || null,
+      deployment_url: data.website_url?.trim() || null,
+      status: data.status || "in_development",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .select("*, owner:profiles!owner_id(*)")
+    .single();
+
+  if (error || !updated) {
+    throw new Error(error?.message || "Failed to update project.");
+  }
+
+  return mapProject(updated);
+}
+
+export async function joinProject(projectId: string, role: string = "Collaborator") {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to join a project.");
+  }
+
+  // 1. Fetch project to ensure existence
+  const { data: project, error: projErr } = await supabase
+    .from("projects")
+    .select("id, name, owner_id")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projErr || !project) {
+    throw new Error("Project not found.");
+  }
+
+  if (project.owner_id === user.id) {
+    throw new Error("You are the owner of this project.");
+  }
+
+  // 2. Check if already joined
+  const { data: existingMember } = await supabase
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", projectId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existingMember) {
+    return { joined: true, message: "Already a member of this project." };
+  }
+
+  // 3. Insert membership
+  const { error: insertErr } = await supabase
+    .from("project_members")
+    .insert({
+      project_id: projectId,
+      user_id: user.id,
+      role: role.trim() || "Collaborator",
+      joined_at: new Date().toISOString(),
+    });
+
+  if (insertErr) {
+    throw new Error(insertErr.message || "Failed to join project.");
+  }
+
+  // 4. Send notification to owner
+  try {
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    await supabase.from("notifications").insert({
+      user_id: project.owner_id,
+      type: "project_joined",
+      message: `${userProfile?.full_name || "A builder"} joined ${project.name} as ${role}.`,
+      entity_id: projectId,
+      is_read: false,
+    });
+  } catch (err) {
+    console.error("Failed to notify project owner:", err);
+  }
+
+  return { joined: true, message: "Successfully joined project team." };
+}
+
+export async function leaveProject(projectId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in.");
+  }
+
+  const { error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message || "Failed to leave project.");
+  }
+
+  return { left: true };
 }

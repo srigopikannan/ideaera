@@ -329,11 +329,11 @@ export function ProfileView({
                 <span>Orbit Idea</span>
               </Link>
               <Link
-                href="/settings/profile"
+                href="/profile/edit"
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-white/20 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors backdrop-blur-md"
               >
                 <Edit3 className="h-3.5 w-3.5" />
-                <span>Edit</span>
+                <span>Edit Profile</span>
               </Link>
             </div>
           ) : (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationCenter } from "./NotificationCenter";
 import { UserMenu } from "./UserMenu";
+import { GlobalSearch } from "./GlobalSearch";
 import {
   Search,
   Menu,
@@ -22,10 +23,28 @@ import {
 export function AppHeader() {
   const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
 
   React.useEffect(() => {
     setIsMobileNavOpen(false);
   }, [pathname]);
+
+  React.useEffect(() => {
+    const handleOpenSearch = () => setIsSearchOpen(true);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("open-global-search", handleOpenSearch);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("open-global-search", handleOpenSearch);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const mobileNavItems = [
     { name: "Discover", href: "/ideas", icon: Lightbulb },
@@ -126,6 +145,9 @@ export function AppHeader() {
           </div>
         </div>
       )}
+
+      {/* Global Command Search Palette */}
+      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
   );
 }

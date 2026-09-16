@@ -31,19 +31,15 @@ function LoginForm() {
       });
 
       if (signInError) {
-        // If placeholder credentials or auth failed, provide user-friendly feedback
-        if (signInError.message.includes("fetch") || signInError.message.includes("dummy")) {
-          // In local preview mode without active keys, proceed gracefully
-          router.push("/profile");
-          return;
-        }
         setError(signInError.message);
         setIsLoading(false);
         return;
       }
 
       if (data.session) {
-        router.push("/profile");
+        const destination = searchParams.get("redirectedFrom") || "/dashboard";
+        router.push(destination);
+        router.refresh();
       }
     } catch (err: any) {
       setError(err?.message || "An unexpected error occurred. Please try again.");
@@ -57,18 +53,15 @@ function LoginForm() {
 
     try {
       const supabase = createClient();
+      const destination = searchParams.get("redirectedFrom") || "/dashboard";
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?redirectedFrom=${encodeURIComponent(destination)}`,
         },
       });
 
       if (oauthError) {
-        if (oauthError.message.includes("fetch") || oauthError.message.includes("dummy")) {
-          router.push("/profile");
-          return;
-        }
         setError(oauthError.message);
         setIsGoogleLoading(false);
       }
@@ -78,12 +71,6 @@ function LoginForm() {
     }
   };
 
-  const handleQuickDemoLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 400);
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 gradient-mesh">
@@ -179,6 +166,12 @@ function LoginForm() {
                   >
                     Password
                   </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-[11px] text-primary hover:underline font-normal"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
                 <Input
                   id="password"
@@ -203,16 +196,13 @@ function LoginForm() {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4 border-t border-border pt-4 text-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleQuickDemoLogin}
-              className="w-full text-xs text-muted-foreground hover:text-foreground border-dashed"
+            <Link
+              href="/ideas"
+              className="w-full text-xs text-muted-foreground hover:text-foreground inline-flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-border hover:bg-surface-hover transition-colors"
             >
-              <CheckCircle2 className="h-3.5 w-3.5 text-success mr-1.5" />
-              Instant Explorer Access
-            </Button>
+              <span>Explore Public Idea Field</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
 
             <p className="text-xs text-muted-foreground">
               Don&apos;t have an account yet?{" "}

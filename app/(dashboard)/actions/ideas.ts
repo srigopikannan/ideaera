@@ -1,6 +1,6 @@
 "use server";
 
-import { createIdea, toggleLikeIdea, addIdeaComment, getIdeas, getIdeaById, deleteIdea } from "@/services/ideas";
+import { createIdea, updateIdea, toggleLikeIdea, addIdeaComment, getIdeas, getIdeaById, deleteIdea } from "@/services/ideas";
 import { revalidatePath } from "next/cache";
 
 export async function createIdeaAction(formData: FormData) {
@@ -35,6 +35,48 @@ export async function createIdeaAction(formData: FormData) {
   } catch (err: any) {
     console.error("Error in createIdeaAction:", err);
     return { error: err?.message || "Failed to publish idea. Please try again." };
+  }
+}
+
+export async function updateIdeaAction(formData: FormData) {
+  try {
+    const id = formData.get("id") as string;
+    const title = formData.get("title") as string;
+    const description = formData.get("description") as string;
+    const category = formData.get("category") as string;
+    const rawTags = formData.get("tags") as string;
+    const problem = (formData.get("problem") as string) || description;
+    const solution = (formData.get("solution") as string) || description;
+
+    if (!id) {
+      return { error: "Idea ID is required." };
+    }
+
+    if (!title || !description || !category) {
+      return { error: "Please fill in all required fields (Title, Category, and Description)." };
+    }
+
+    const tags = rawTags
+      ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
+
+    const updated = await updateIdea(id, {
+      title,
+      description,
+      category,
+      tags,
+      problem,
+      solution,
+    });
+
+    revalidatePath("/ideas");
+    revalidatePath(`/ideas/${id}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    return { success: true, idea: updated };
+  } catch (err: any) {
+    console.error("Error in updateIdeaAction:", err);
+    return { error: err?.message || "Failed to update idea. Please try again." };
   }
 }
 

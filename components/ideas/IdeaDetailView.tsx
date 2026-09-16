@@ -19,9 +19,11 @@ import {
   MessageSquare,
   Check,
   ArrowUpRight,
+  Edit3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
+import { EditIdeaModal } from "@/components/ideas/EditIdeaModal";
 import { CelestialIdeaCore } from "@/components/ideas/CelestialIdeaCore";
 
 interface IdeaDetailViewProps {
@@ -45,12 +47,14 @@ export function IdeaDetailView({
   currentUser,
 }: IdeaDetailViewProps) {
   const router = useRouter();
+  const [currentIdea, setCurrentIdea] = React.useState<Idea>(idea);
   const [isLiked, setIsLiked] = React.useState(idea.is_liked || false);
   const [likesCount, setLikesCount] = React.useState(idea.likes_count || 0);
   const [comments, setComments] = React.useState<IdeaComment[]>(initialComments);
   const [commentInput, setCommentInput] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
 
   // Scroll tracking for 6-dimensional narrative
   const [scrollProgress, setScrollProgress] = React.useState(0);
@@ -71,8 +75,8 @@ export function IdeaDetailView({
   const activeDimIndex = Math.min(Math.floor(scrollProgress * DIMENSIONS.length), DIMENSIONS.length - 1);
   const activeDim = DIMENSIONS[activeDimIndex];
 
-  // Deletion state
-  const isOwner = Boolean(currentUser?.id && idea.author_id === currentUser.id);
+  // Deletion and Editing state
+  const isOwner = Boolean(currentUser?.id && currentIdea.author_id === currentUser.id);
   const [showMenu, setShowMenu] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -215,6 +219,16 @@ export function IdeaDetailView({
                   <button
                     onClick={() => {
                       setShowMenu(false);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono text-neutral-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Edit Concept</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
                       setIsDeleteModalOpen(true);
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-left"
@@ -235,7 +249,7 @@ export function IdeaDetailView({
         <div className="absolute right-0 sm:right-12 top-1/2 -translate-y-1/2 w-full sm:w-[500px] h-[500px] pointer-events-none opacity-80 z-0">
           <CelestialIdeaCore
             scrollProgress={scrollProgress}
-            category={idea.category}
+            category={currentIdea.category}
             className="w-full h-full"
           />
         </div>
@@ -244,39 +258,39 @@ export function IdeaDetailView({
         <div className="relative z-10 space-y-6 max-w-2xl">
           <div className="flex items-center gap-3">
             <span className="px-3.5 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-mono uppercase tracking-[0.24em]">
-              IDEA // {idea.category}
+              IDEA // {currentIdea.category}
             </span>
             <span className="text-xs font-mono text-neutral-500">
-              Published {formatDate(idea.created_at)}
+              Published {formatDate(currentIdea.created_at)}
             </span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.05]">
-            {idea.title}
+            {currentIdea.title}
           </h1>
 
           {/* Author Badge */}
           <div className="flex items-center gap-3 pt-4">
             <div className="h-10 w-10 rounded-full bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold overflow-hidden">
-              {idea.author?.avatar_url ? (
+              {currentIdea.author?.avatar_url ? (
                 <img
-                  src={idea.author.avatar_url}
-                  alt={idea.author.full_name || "Author"}
+                  src={currentIdea.author.avatar_url}
+                  alt={currentIdea.author.full_name || "Author"}
                   className="h-full w-full object-cover"
                 />
               ) : (
-                (idea.author?.full_name || "I").charAt(0).toUpperCase()
+                (currentIdea.author?.full_name || "I").charAt(0).toUpperCase()
               )}
             </div>
             <div>
               <Link
-                href={"/people/" + (idea.author?.username || "creator")}
+                href={"/people/" + (currentIdea.author?.username || "creator")}
                 className="text-sm font-medium text-white hover:text-indigo-300 transition-colors"
               >
-                {idea.author?.full_name || "Innovator"}
+                {currentIdea.author?.full_name || "Innovator"}
               </Link>
               <p className="text-[11px] font-mono text-neutral-500">
-                {idea.author?.headline || ("@" + (idea.author?.username || "creator"))}
+                {currentIdea.author?.headline || ("@" + (currentIdea.author?.username || "creator"))}
               </p>
             </div>
           </div>
@@ -295,7 +309,7 @@ export function IdeaDetailView({
             The Structural Friction
           </h2>
           <div className="text-neutral-300 text-base sm:text-lg font-light leading-relaxed whitespace-pre-line max-w-3xl">
-            {idea.description.split("\n\n")[0] || idea.description}
+            {currentIdea.problem || currentIdea.description.split("\n\n")[0] || currentIdea.description}
           </div>
         </div>
       </section>
@@ -312,13 +326,13 @@ export function IdeaDetailView({
             Proposed Model & Synthesis
           </h2>
           <div className="text-neutral-300 text-base sm:text-lg font-light leading-relaxed whitespace-pre-line">
-            {idea.description.split("\n\n")[1] || idea.description}
+            {currentIdea.solution || currentIdea.description.split("\n\n")[1] || currentIdea.description}
           </div>
 
           {/* Tags */}
-          {idea.tags && idea.tags.length > 0 && (
+          {currentIdea.tags && currentIdea.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-4">
-              {idea.tags.map((tag) => (
+              {currentIdea.tags.map((tag) => (
                 <span
                   key={tag}
                   className="px-3 py-1 rounded-full text-xs font-mono border border-white/10 bg-white/[0.02] text-neutral-400 hover:text-white hover:border-white/20 transition-all"
@@ -436,9 +450,20 @@ export function IdeaDetailView({
         }}
         onConfirm={handleDeleteConfirm}
         title="Delete Concept"
-        description={'Are you sure you want to permanently delete "' + idea.title + '"? This action cannot be undone.'}
+        description={'Are you sure you want to permanently delete "' + currentIdea.title + '"? This action cannot be undone.'}
         isDeleting={isDeleting}
         error={deleteError}
+      />
+
+      {/* Edit Idea Modal */}
+      <EditIdeaModal
+        idea={currentIdea}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onUpdated={(updated) => {
+          setCurrentIdea((prev) => ({ ...prev, ...updated }));
+          router.refresh();
+        }}
       />
     </div>
   );

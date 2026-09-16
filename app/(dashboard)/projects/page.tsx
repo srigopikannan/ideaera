@@ -2,6 +2,8 @@ import { getProjects } from "@/services/projects";
 import { ProjectsExplorer } from "@/components/projects/ProjectsExplorer";
 import { FolderGit2 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Projects Showcase — IdeaEra",
   description: "Explore innovative products, software tools, and prototypes built by the community.",

@@ -81,6 +81,27 @@ export async function removeConnection(connectionId: string): Promise<void> {
   }
 }
 
+function formatNotificationTitle(type: string): string {
+  switch (type) {
+    case "connection_request":
+      return "Connection Request";
+    case "connection_accepted":
+      return "Connection Accepted";
+    case "idea_like":
+      return "Concept Endorsement";
+    case "idea_comment":
+      return "New Critique Note";
+    case "project_invite":
+      return "Venture Invitation";
+    case "project_joined":
+      return "Venture Member Joined";
+    case "message":
+      return "New Transmission";
+    default:
+      return "System Signal";
+  }
+}
+
 export async function getNotifications(): Promise<Notification[]> {
   try {
     const supabase = await createClient();
@@ -93,7 +114,18 @@ export async function getNotifications(): Promise<Notification[]> {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (data && !error) return data;
+      if (data && !error) {
+        return data.map((r: any) => ({
+          id: r.id,
+          user_id: r.user_id,
+          type: r.type,
+          title: r.title || formatNotificationTitle(r.type),
+          message: r.message,
+          related_id: r.entity_id || r.related_id || null,
+          read: Boolean(r.is_read ?? r.read),
+          created_at: r.created_at,
+        }));
+      }
     }
   } catch (err) {
     console.error("Error in getNotifications:", err);
@@ -105,7 +137,7 @@ export async function getNotifications(): Promise<Notification[]> {
 export async function markNotificationAsRead(id: string): Promise<void> {
   try {
     const supabase = await createClient();
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
   } catch (err) {
     console.error("Error in markNotificationAsRead:", err);
   }
@@ -116,7 +148,7 @@ export async function markAllNotificationsAsRead(): Promise<void> {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from("notifications").update({ read: true }).eq("user_id", user.id);
+      await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id);
     }
   } catch (err) {
     console.error("Error in markAllNotificationsAsRead:", err);

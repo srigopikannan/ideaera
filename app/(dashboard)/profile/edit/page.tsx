@@ -1,6 +1,8 @@
 import { getCurrentUserProfile } from "@/services/profile";
 import { EditProfileForm } from "@/components/profile/EditProfileForm";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Edit Profile — IdeaEra",
   description: "Update your public profile, skills, and links.",

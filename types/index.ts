@@ -37,6 +37,8 @@ export interface Idea {
   author?: Profile;
   title: string;
   description: string;
+  problem?: string | null;
+  solution?: string | null;
   category: string;
   tags: string[];
   status: 'open' | 'in_progress' | 'implemented';
@@ -155,7 +157,7 @@ export interface Conversation {
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'connection_request' | 'connection_accepted' | 'message' | 'idea_like' | 'idea_comment' | 'project_invite';
+  type: 'connection_request' | 'connection_accepted' | 'message' | 'idea_like' | 'idea_comment' | 'project_invite' | 'project_joined';
   title: string;
   message: string;
   related_id?: string | null;

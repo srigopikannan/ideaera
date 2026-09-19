@@ -17,7 +17,12 @@ export async function updateProfileAction(formData: FormData) {
     ? rawSkills.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
 
-  const college = (formData.get("college") as string) || undefined;
+  const college = formData.has("college")
+    ? (formData.get("college") as string).trim() || null
+    : undefined;
+  const college_id = formData.has("college_id")
+    ? (formData.get("college_id") as string).trim() || null
+    : undefined;
   const rawAge = formData.get("age") as string;
   const age = rawAge ? parseInt(rawAge, 10) : undefined;
   const show_age = formData.has("show_age") ? formData.get("show_age") === "true" : undefined;
@@ -40,6 +45,7 @@ export async function updateProfileAction(formData: FormData) {
     linkedin_url,
     skills,
     college,
+    college_id,
     age,
     show_age,
     city,

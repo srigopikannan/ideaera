@@ -13,7 +13,7 @@ import {
   getStatesAction,
   getCitiesAction,
   getCollegesAction,
-  addCustomCollegeAction,
+  suggestCollegeAction,
 } from "@/app/(dashboard)/actions/reference-data";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock, Building, Plus, X } from "lucide-react";
@@ -29,6 +29,8 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   const [headline, setHeadline] = React.useState(initialProfile.headline || "");
   const [bio, setBio] = React.useState(initialProfile.bio || "");
   const [college, setCollege] = React.useState(initialProfile.college || "");
+  const [collegeId, setCollegeId] = React.useState<string | null>(initialProfile.college_id || null);
+  const [collegeLocation, setCollegeLocation] = React.useState<string | null>(initialProfile.college_location || null);
   const [age, setAge] = React.useState(initialProfile.age ? String(initialProfile.age) : "");
   const [showAge, setShowAge] = React.useState(initialProfile.show_age ?? true);
   const [city, setCity] = React.useState(initialProfile.city || "");
@@ -42,34 +44,58 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   const [skills, setSkills] = React.useState(initialProfile.skills?.join(", ") || "");
   const [interests, setInterests] = React.useState(initialProfile.interests?.join(", ") || "");
 
+  // Auto-resolve college location for existing profiles if missing
+  React.useEffect(() => {
+    if (!collegeLocation && (college || collegeId)) {
+      getCollegesAction(college || "").then((results) => {
+        const match = results.find(
+          (c) =>
+            (collegeId && c.id === collegeId) ||
+            (college && c.name.toLowerCase() === college.toLowerCase())
+        );
+        if (match) {
+          const loc = match.city && match.state ? `${match.city}, ${match.state}` : (match.extra || null);
+          if (loc) setCollegeLocation(loc);
+        }
+      }).catch(() => {});
+    }
+  }, [college, collegeId, collegeLocation]);
+
   // Custom college form state
   const [showAddCollegeModal, setShowAddCollegeModal] = React.useState(false);
   const [newCollegeName, setNewCollegeName] = React.useState("");
   const [newCollegeCity, setNewCollegeCity] = React.useState("");
   const [newCollegeState, setNewCollegeState] = React.useState("");
   const [isAddingCollege, setIsAddingCollege] = React.useState(false);
+  const [suggestSuccessMsg, setSuggestSuccessMsg] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [savedSuccess, setSavedSuccess] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  const handleAddCollege = async (e: React.FormEvent) => {
+  const handleSuggestCollege = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollegeName.trim()) return;
     setIsAddingCollege(true);
+    setSuggestSuccessMsg(null);
     try {
-      const created = await addCustomCollegeAction(
+      const res = await suggestCollegeAction(
         newCollegeName.trim(),
         newCollegeCity.trim() || city || undefined,
         newCollegeState.trim() || state || undefined
       );
-      if (created) {
-        setCollege(created.name);
-        setShowAddCollegeModal(false);
-        setNewCollegeName("");
+      if (res.success) {
+        setCollege(newCollegeName.trim());
+        setCollegeId(null);
+        setSuggestSuccessMsg(res.message || "Thank you! Your college suggestion has been submitted for review.");
+        setTimeout(() => {
+          setShowAddCollegeModal(false);
+          setNewCollegeName("");
+          setSuggestSuccessMsg(null);
+        }, 1800);
       }
     } catch (err) {
-      console.error("Error adding custom college:", err);
+      console.error("Error submitting college suggestion:", err);
     } finally {
       setIsAddingCollege(false);
     }
@@ -88,6 +114,7 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
     formData.append("headline", headline);
     formData.append("bio", bio);
     formData.append("college", college);
+    formData.append("college_id", collegeId || "");
     if (age) formData.append("age", age);
     formData.append("show_age", showAge ? "true" : "false");
     formData.append("city", city);
@@ -203,9 +230,18 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
                   placeholder="Type college name or acronym (e.g. PSG, CIT, Anna, IIT)..."
                   value={college}
                   leftIcon={<GraduationCap className="h-4 w-4 text-primary" />}
-                  onSearch={(q) => getCollegesAction(q, state, city)}
-                  onSelect={(item) => setCollege(item.name)}
-                  onClear={() => setCollege("")}
+                  onSearch={(q) => getCollegesAction(q)}
+                  onSelect={(item) => {
+                    setCollege(item.name);
+                    setCollegeId(item.id);
+                    const derivedLoc = item.city && item.state ? `${item.city}, ${item.state}` : (item.extra || null);
+                    setCollegeLocation(derivedLoc);
+                  }}
+                  onClear={() => {
+                    setCollege("");
+                    setCollegeId(null);
+                    setCollegeLocation(null);
+                  }}
                   emptyMessage="No colleges found matching your search."
                   customActionSlot={
                     <div className="flex items-center justify-between pt-1">
@@ -214,24 +250,38 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setShowAddCollegeModal(true)}
+                        onClick={() => {
+                          setShowAddCollegeModal(true);
+                          setSuggestSuccessMsg(null);
+                        }}
                         className="inline-flex items-center gap-1 text-xs font-mono text-primary hover:underline cursor-pointer"
                       >
                         <Plus className="h-3 w-3" />
-                        <span>Add College</span>
+                        <span>Suggest a college</span>
                       </button>
                     </div>
                   }
                 />
+                {college && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-2 px-1">
+                    <MapPin className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                    <span>College Location: <strong className="text-foreground">{collegeLocation || "Tamil Nadu"}</strong></span>
+                  </div>
+                )}
               </div>
 
-              {/* Add Custom College Inline Section */}
+              {/* Suggest College Modal / Inline Section */}
               {showAddCollegeModal && (
-                <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">
+                <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3.5 animate-fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                      Add New College / University
-                    </span>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                        Suggest a College / University
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Your submission will be queued for review and can be saved to your profile now.
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setShowAddCollegeModal(false)}
@@ -240,40 +290,52 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
                       <X className="h-4 w-4" />
                     </button>
                   </div>
+
+                  {suggestSuccessMsg && (
+                    <div className="p-2.5 rounded-lg bg-success/15 border border-success/30 text-xs text-success flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span>{suggestSuccessMsg}</span>
+                    </div>
+                  )}
+
                   <Input
                     value={newCollegeName}
                     onChange={(e) => setNewCollegeName(e.target.value)}
-                    placeholder="College / Institute Full Name *"
+                    placeholder="Official College / Institution Full Name *"
                     required
+                    disabled={isAddingCollege}
                   />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
                       value={newCollegeCity}
                       onChange={(e) => setNewCollegeCity(e.target.value)}
                       placeholder={`City (e.g. ${city || "Coimbatore"})`}
+                      disabled={isAddingCollege}
                     />
                     <Input
                       value={newCollegeState}
                       onChange={(e) => setNewCollegeState(e.target.value)}
                       placeholder={`State (e.g. ${state || "Tamil Nadu"})`}
+                      disabled={isAddingCollege}
                     />
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 pt-1">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => setShowAddCollegeModal(false)}
+                      disabled={isAddingCollege}
                     >
                       Cancel
                     </Button>
                     <Button
                       type="button"
                       size="sm"
-                      onClick={handleAddCollege}
+                      onClick={handleSuggestCollege}
                       disabled={isAddingCollege || !newCollegeName.trim()}
                     >
-                      {isAddingCollege ? "Adding..." : "Save and Select"}
+                      {isAddingCollege ? "Submitting..." : "Submit Suggestion"}
                     </Button>
                   </div>
                 </div>

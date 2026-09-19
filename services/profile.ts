@@ -78,8 +78,12 @@ function formatProfile(p: any, viewerUserId?: string): Profile {
   const displayCountry = (isOwner || showLocation) ? country : null;
   const displayAge = (isOwner || showAge) && p.age ? Number(p.age) : null;
 
-  // College resolution (checks college column, availability column fallback, or raw)
-  const college = p.college || p.availability || null;
+  // College resolution (checks college_id, college column, availability column fallback, or raw)
+  const college = p.college || p.availability || p.college_rel?.name || null;
+  const college_id = p.college_id || p.college_rel?.id || null;
+  const college_location = p.college_rel
+    ? [p.college_rel.city, p.college_rel.state || "Tamil Nadu"].filter(Boolean).join(", ")
+    : null;
 
   return {
     ...p,
@@ -95,6 +99,8 @@ function formatProfile(p: any, viewerUserId?: string): Profile {
     country: displayCountry,
     show_location: showLocation,
     college,
+    college_id,
+    college_location,
     age: displayAge,
     show_age: showAge,
     onboarding_completed: Boolean(
@@ -116,7 +122,7 @@ export async function getCurrentUserProfile(): Promise<Profile> {
 
     let { data } = await supabase
       .from("profiles")
-      .select("*, user_skills(*, skill:skills(*))")
+      .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -142,7 +148,7 @@ export async function getCurrentUserProfile(): Promise<Profile> {
             user.user_metadata?.avatar_url ||
             `https://api.dicebear.com/7.x/shapes/svg?seed=${user.id}`,
         })
-        .select("*, user_skills(*, skill:skills(*))")
+        .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))")
         .single();
       data = createdProfile;
     }
@@ -168,7 +174,7 @@ export async function getProfileByUsername(username: string): Promise<Profile | 
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("*, user_skills(*, skill:skills(*))")
+      .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))")
       .eq("username", username)
       .maybeSingle();
 
@@ -238,7 +244,7 @@ export async function getAllProfiles(
 
     let queryBuilder = supabase
       .from("profiles")
-      .select("*, user_skills(*, skill:skills(*))");
+      .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))");
 
     if (options.query) {
       queryBuilder = queryBuilder.or(
@@ -364,7 +370,12 @@ export async function updateProfile(
   }
 
   if (profileData.college !== undefined) {
-    updatePayload.availability = profileData.college;
+    updatePayload.college = profileData.college || null;
+    updatePayload.availability = profileData.college || null;
+  }
+
+  if (profileData.college_id !== undefined) {
+    updatePayload.college_id = profileData.college_id || null;
   }
 
   const websiteVal = profileData.portfolio_url || profileData.website;
@@ -374,11 +385,12 @@ export async function updateProfile(
 
   let finalProfileRecord: any = null;
 
-  // Attempt extended update (if columns college, age, city, state, show_age etc. exist in DB)
+  // Attempt extended update (if columns college, college_id, age, city, state, show_age etc. exist in DB)
   try {
     const extendedPayload = {
       ...updatePayload,
-      ...(profileData.college !== undefined ? { college: profileData.college } : {}),
+      ...(profileData.college !== undefined ? { college: profileData.college || null } : {}),
+      ...(profileData.college_id !== undefined ? { college_id: profileData.college_id || null } : {}),
       ...(profileData.age !== undefined ? { age: profileData.age ? Number(profileData.age) : null } : {}),
       ...(profileData.show_age !== undefined ? { show_age: profileData.show_age } : {}),
       ...(profileData.city !== undefined ? { city: profileData.city } : {}),
@@ -424,6 +436,7 @@ export async function updateProfile(
         full_name: profileData.full_name,
         headline: profileData.headline,
         college: profileData.college,
+        college_id: profileData.college_id || null,
         age: profileData.age,
         show_age: profileData.show_age,
         city: profileData.city,

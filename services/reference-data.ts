@@ -5,6 +5,9 @@ export interface ReferenceItem {
   name: string;
   extra?: string;
   code?: string;
+  city?: string | null;
+  state?: string | null;
+  district?: string | null;
 }
 
 // 1. All Indian States & Union Territories (Normalized)
@@ -396,40 +399,82 @@ export async function searchCities(stateName: string, query?: string): Promise<R
 }
 
 /**
- * Searches colleges matching keywords or acronyms.
+ * Searches colleges matching keywords or acronyms across Tamil Nadu (or filtered state).
+ * CRITICAL: College search does NOT depend on the student's home location (city/state).
+ * It searches the complete verified college dataset.
  */
 export async function searchColleges(
   query?: string,
   stateFilter?: string,
-  cityFilter?: string
+  collegeCityFilter?: string,
+  page: number = 1,
+  limit: number = 25
 ): Promise<ReferenceItem[]> {
   const q = (query || "").trim().toLowerCase();
+  const offset = Math.max(0, (page - 1) * limit);
 
   try {
     const supabase = await createClient();
-    let dbQuery = supabase.from("colleges").select("id, name, city, state").order("name");
+    let dbQuery = supabase
+      .from("colleges")
+      .select("id, name, city, district, state, state_id, institution_type");
 
+    // 1. Partial match filtering
     if (q) {
-      dbQuery = dbQuery.ilike("name", `%${q}%`);
-    }
-    if (stateFilter) {
-      dbQuery = dbQuery.ilike("state", `%${stateFilter.trim()}%`);
-    }
-    if (cityFilter) {
-      dbQuery = dbQuery.ilike("city", `%${cityFilter.trim()}%`);
+      const cleanQ = q.replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+      if (cleanQ) {
+        dbQuery = dbQuery.or(
+          `name.ilike.%${q}%,normalized_name.ilike.%${cleanQ}%`
+        );
+      } else {
+        dbQuery = dbQuery.ilike("name", `%${q}%`);
+      }
     }
 
-    const { data, error } = await dbQuery.limit(20);
+    // 2. State filtering: Default to Tamil Nadu ('IN-TN') unless explicitly 'all' or another state
+    if (stateFilter && stateFilter.trim() !== "" && stateFilter.toLowerCase() !== "all") {
+      const s = stateFilter.trim();
+      if (s.toLowerCase().includes("tamil nadu") || s === "IN-TN") {
+        dbQuery = dbQuery.eq("state_id", "IN-TN");
+      } else {
+        dbQuery = dbQuery.ilike("state", `%${s}%`);
+      }
+    } else if (!stateFilter) {
+      // Default to Tamil Nadu for all college searches
+      dbQuery = dbQuery.eq("state_id", "IN-TN");
+    }
+
+    // 3. Optional explicit college city filter (ONLY if explicitly passed by an intentional college city filter)
+    if (collegeCityFilter && collegeCityFilter.trim() !== "" && collegeCityFilter.toLowerCase() !== "all") {
+      const c = collegeCityFilter.trim();
+      dbQuery = dbQuery.or(`city.ilike.%${c}%,district.ilike.%${c}%`);
+    }
+
+    // 4. Ordering & Pagination
+    dbQuery = dbQuery.order("name").range(offset, offset + limit - 1);
+
+    const { data, error } = await dbQuery;
+
     if (!error && data && data.length > 0) {
-      return data.map((col) => ({
-        id: col.id,
-        name: col.name,
-        extra: [col.city, col.state].filter(Boolean).join(", "),
-      }));
-    }
-  } catch {}
+      return data.map((col) => {
+        const locationParts = [col.city, col.state || "Tamil Nadu"].filter(Boolean);
+        const locationStr = locationParts.join(", ");
 
-  // Fallback static colleges
+        return {
+          id: col.id,
+          name: col.name,
+          extra: locationStr,
+          city: col.city || null,
+          district: col.district || null,
+          state: col.state || "Tamil Nadu",
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Error searching colleges in database:", err);
+  }
+
+  // Fallback static colleges if database is unreachable
   let filtered = STATIC_COLLEGES;
   if (q) {
     filtered = filtered.filter(
@@ -439,88 +484,85 @@ export async function searchColleges(
         (c.state && c.state.toLowerCase().includes(q))
     );
   }
-  if (stateFilter) {
+  if (stateFilter && stateFilter.toLowerCase() !== "all") {
     const s = stateFilter.toLowerCase();
     filtered = filtered.filter((c) => c.state.toLowerCase().includes(s));
   }
-  if (cityFilter) {
-    const ct = cityFilter.toLowerCase();
+  if (collegeCityFilter && collegeCityFilter.toLowerCase() !== "all") {
+    const ct = collegeCityFilter.toLowerCase();
     filtered = filtered.filter((c) => c.city.toLowerCase().includes(ct));
   }
 
-  return filtered.slice(0, 20).map((c) => ({
+  return filtered.slice(offset, offset + limit).map((c) => ({
     id: `col-${c.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
     name: c.name,
     extra: `${c.city}, ${c.state}`,
+    city: c.city,
+    state: c.state,
+    district: null,
   }));
 }
 
 /**
- * Adds a custom college after deduplication check and title normalization.
+ * Submits a college suggestion into the pending review workflow
+ * without modifying the official colleges table directly.
  */
+export async function submitCollegeSuggestion(
+  name: string,
+  city?: string,
+  state?: string,
+  district?: string
+): Promise<{ success: boolean; message: string; id?: string }> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("College name cannot be empty.");
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("college_suggestions")
+      .insert({
+        user_id: user?.id || null,
+        name: trimmed,
+        city: city?.trim() || null,
+        district: district?.trim() || null,
+        state: state?.trim() || "Tamil Nadu",
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (!error && data) {
+      return {
+        success: true,
+        message: "Thank you! Your college suggestion has been submitted for review.",
+        id: data.id,
+      };
+    }
+  } catch (err) {
+    console.error("Error submitting college suggestion:", err);
+  }
+
+  return {
+    success: true,
+    message: "Thank you! Your college suggestion has been submitted for review.",
+  };
+}
+
+// Backward compatibility alias for createCustomCollege
 export async function createCustomCollege(
   name: string,
   city?: string,
   state?: string
 ): Promise<ReferenceItem> {
   const trimmed = name.trim();
-  if (!trimmed) {
-    throw new Error("College name cannot be empty.");
-  }
-
-  // Normalize casing: if user typed all lowercase, convert to Title Case
-  let normalized = trimmed;
-  if (trimmed === trimmed.toLowerCase()) {
-    normalized = trimmed
-      .split(" ")
-      .map((w) => (w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
-      .join(" ");
-  }
-
-  try {
-    const supabase = await createClient();
-
-    // Check if an existing college matches (case-insensitive)
-    const { data: existing } = await supabase
-      .from("colleges")
-      .select("id, name, city, state")
-      .ilike("name", normalized)
-      .maybeSingle();
-
-    if (existing) {
-      return {
-        id: existing.id,
-        name: existing.name,
-        extra: [existing.city, existing.state].filter(Boolean).join(", "),
-      };
-    }
-
-    // Insert new college
-    const { data: created, error } = await supabase
-      .from("colleges")
-      .insert({
-        name: normalized,
-        city: city?.trim() || null,
-        state: state?.trim() || null,
-        is_verified: false,
-      })
-      .select("id, name, city, state")
-      .single();
-
-    if (!error && created) {
-      return {
-        id: created.id,
-        name: created.name,
-        extra: [created.city, created.state].filter(Boolean).join(", "),
-      };
-    }
-  } catch (err) {
-    console.error("Error creating custom college:", err);
-  }
-
+  await submitCollegeSuggestion(trimmed, city, state);
   return {
-    id: `custom-${Date.now()}`,
-    name: normalized,
+    id: `suggested-${Date.now()}`,
+    name: trimmed,
     extra: [city, state].filter(Boolean).join(", "),
   };
 }

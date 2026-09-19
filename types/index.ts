@@ -19,6 +19,8 @@ export interface Profile {
   country?: string | null;
   show_location?: boolean;
   college?: string | null;
+  college_id?: string | null;
+  college_location?: string | null;
   age?: number | null;
   show_age?: boolean;
   onboarding_completed?: boolean;
@@ -199,3 +201,21 @@ export interface MatchRecommendation {
   complementarySkills?: string[];
   projects?: { id: string; name: string; slug?: string }[];
 }
+
+export interface College {
+  id: string;
+  name: string;
+  normalized_name: string;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
+  state_id?: string | null;
+  country?: string | null;
+  country_id?: string | null;
+  university?: string | null;
+  institution_type?: string | null;
+  is_verified?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+

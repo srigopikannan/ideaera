@@ -51,8 +51,8 @@ export function formatDate(dateString: string | null | undefined): string {
   if (!dateString || isEpochOrInvalid(dateString)) return "";
   const str = String(dateString).trim();
 
-  // Handle YYYY-MM-DD calendar dates strictly to prevent timezone shifts
-  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // Handle pure YYYY-MM-DD calendar dates strictly to prevent timezone shifts
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) {
     const year = parseInt(m[1], 10);
     const month = parseInt(m[2], 10) - 1;
@@ -65,6 +65,7 @@ export function formatDate(dateString: string | null | undefined): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Asia/Kolkata",
   }).format(date);
 }
 
@@ -78,6 +79,7 @@ export function formatDateTime(dateString: string | null | undefined): string {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   }).format(date);
 }
 
@@ -86,7 +88,7 @@ export function formatDateTimeWithTz(
   timeZone: string = "Asia/Kolkata",
   tzLabel: string = "IST"
 ): string {
-  if (!dateString || isEpochOrInvalid(dateString)) return "Date to be announced";
+  if (!dateString || isEpochOrInvalid(dateString)) return "Date unavailable";
   const date = new Date(dateString);
 
   try {
@@ -102,7 +104,7 @@ export function formatDateTimeWithTz(
 
     return `${formatted} ${tzLabel}`;
   } catch {
-    return formatDateTime(dateString);
+    return formatDate(dateString);
   }
 }
 
@@ -112,17 +114,18 @@ export function formatEventDateRange(
   options: { timeZone?: string } = { timeZone: "Asia/Kolkata" }
 ): string {
   if (isEpochOrInvalid(startStr)) {
-    return "Date TBD";
+    return "Date unavailable";
   }
 
+  const tz = options.timeZone || "Asia/Kolkata";
   const start = new Date(startStr!);
+  const p1 = getDateParts(start, tz);
+
   if (isEpochOrInvalid(endStr)) {
-    return formatDate(startStr);
+    return `${p1.monthStr} ${p1.day}, ${p1.year}`;
   }
 
   const end = new Date(endStr!);
-  const tz = options.timeZone || "Asia/Kolkata";
-  const p1 = getDateParts(start, tz);
   const p2 = getDateParts(end, tz);
 
   // Same calendar day

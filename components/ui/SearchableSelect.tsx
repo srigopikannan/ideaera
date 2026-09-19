@@ -9,6 +9,9 @@ export interface SearchableItem {
   name: string;
   extra?: string;
   code?: string;
+  city?: string | null;
+  state?: string | null;
+  district?: string | null;
 }
 
 export interface SearchableSelectProps {
@@ -75,14 +78,17 @@ export function SearchableSelect({
     };
   }, [value]);
 
-  // Debounced search trigger
+  // Debounced search trigger (instant on focus/open, 250ms on typing)
   React.useEffect(() => {
     if (!isOpen || disabled) return;
 
     setIsLoading(true);
+    const isInitialOpen = (inputValue === value);
+    const delay = isInitialOpen ? 0 : 250;
+
     const timer = setTimeout(async () => {
       try {
-        const query = inputValue === value ? "" : inputValue;
+        const query = isInitialOpen ? "" : inputValue;
         const results = await onSearch(query);
         setItems(results);
         setHighlightedIndex(-1);
@@ -92,7 +98,7 @@ export function SearchableSelect({
       } finally {
         setIsLoading(false);
       }
-    }, 150);
+    }, delay);
 
     return () => clearTimeout(timer);
   }, [inputValue, isOpen, disabled, value, onSearch]);

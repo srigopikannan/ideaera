@@ -5,6 +5,7 @@ import {
   searchCities,
   searchColleges,
   createCustomCollege,
+  submitCollegeSuggestion,
   ReferenceItem,
 } from "@/services/reference-data";
 
@@ -18,10 +19,10 @@ export async function getCitiesAction(state: string, query?: string): Promise<Re
 
 export async function getCollegesAction(
   query?: string,
-  state?: string,
-  city?: string
+  collegeState?: string,
+  collegeCity?: string
 ): Promise<ReferenceItem[]> {
-  return await searchColleges(query, state, city);
+  return await searchColleges(query, collegeState, collegeCity);
 }
 
 export async function addCustomCollegeAction(
@@ -31,3 +32,13 @@ export async function addCustomCollegeAction(
 ): Promise<ReferenceItem> {
   return await createCustomCollege(name, city, state);
 }
+
+export async function suggestCollegeAction(
+  name: string,
+  city?: string,
+  state?: string,
+  district?: string
+): Promise<{ success: boolean; message: string; id?: string }> {
+  return await submitCollegeSuggestion(name, city, state, district);
+}
+

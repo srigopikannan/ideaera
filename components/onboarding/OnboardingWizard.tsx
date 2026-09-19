@@ -8,7 +8,7 @@ import {
   getStatesAction,
   getCitiesAction,
   getCollegesAction,
-  addCustomCollegeAction,
+  suggestCollegeAction,
 } from "@/app/(dashboard)/actions/reference-data";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
@@ -102,12 +102,15 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
   // Step 5: College
   const [collegesList, setCollegesList] = React.useState<string[]>(initialColleges);
   const [selectedCollege, setSelectedCollege] = React.useState(initialProfile.college || "");
+  const [selectedCollegeId, setSelectedCollegeId] = React.useState(initialProfile.college_id || "");
+  const [selectedCollegeLocation, setSelectedCollegeLocation] = React.useState(initialProfile.college_location || "");
   const [collegeSearch, setCollegeSearch] = React.useState("");
   const [showCustomCollegeForm, setShowCustomCollegeForm] = React.useState(false);
   const [customCollegeName, setCustomCollegeName] = React.useState("");
   const [customCollegeCity, setCustomCollegeCity] = React.useState("");
   const [customCollegeState, setCustomCollegeState] = React.useState("");
   const [isAddingCollege, setIsAddingCollege] = React.useState(false);
+  const [suggestSuccessMsg, setSuggestSuccessMsg] = React.useState<string | null>(null);
 
   // Step 6: Location, Privacy & Interests
   const [city, setCity] = React.useState(initialProfile.city || "");
@@ -156,22 +159,28 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
     );
   };
 
-  // Custom college addition
+  // Custom college suggestion
   const handleCreateCollege = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customCollegeName.trim()) return;
     setIsAddingCollege(true);
+    setSuggestSuccessMsg(null);
 
     try {
-      const added = await addCustomCollegeAction(
+      const res = await suggestCollegeAction(
         customCollegeName.trim(),
         customCollegeCity.trim() || city || undefined,
         customCollegeState.trim() || state || undefined
       );
-      if (added) {
-        setSelectedCollege(added.name);
-        setShowCustomCollegeForm(false);
-        setCustomCollegeName("");
+      if (res.success) {
+        setSelectedCollege(customCollegeName.trim());
+        setSelectedCollegeId("");
+        setSuggestSuccessMsg("College suggestion submitted! We've selected it for your profile.");
+        setTimeout(() => {
+          setShowCustomCollegeForm(false);
+          setCustomCollegeName("");
+          setSuggestSuccessMsg(null);
+        }, 1500);
       }
     } catch (err) {
       console.error(err);
@@ -202,6 +211,7 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
       age: numericAge,
       show_age: showAge,
       college: selectedCollege.trim() || undefined,
+      college_id: selectedCollegeId.trim() || undefined,
       city: city.trim() || undefined,
       state: state.trim() || undefined,
       country: country.trim() || "India",
@@ -501,9 +511,18 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                     placeholder="Type college name or acronym (e.g. PSG, CIT, Anna, IIT)..."
                     value={selectedCollege}
                     leftIcon={<GraduationCap className="h-4 w-4 text-indigo-400" />}
-                    onSearch={(q) => getCollegesAction(q, state, city)}
-                    onSelect={(item) => setSelectedCollege(item.name)}
-                    onClear={() => setSelectedCollege("")}
+                    onSearch={(q) => getCollegesAction(q)}
+                    onSelect={(item) => {
+                      setSelectedCollege(item.name);
+                      setSelectedCollegeId(item.id);
+                      const loc = item.city && item.state ? `${item.city}, ${item.state}` : (item.extra || "");
+                      setSelectedCollegeLocation(loc);
+                    }}
+                    onClear={() => {
+                      setSelectedCollege("");
+                      setSelectedCollegeId("");
+                      setSelectedCollegeLocation("");
+                    }}
                     emptyMessage="No colleges found matching your search."
                     customActionSlot={
                       <div className="flex items-center justify-between">
@@ -516,7 +535,7 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-xs font-mono text-indigo-300 hover:bg-indigo-500/20 transition-colors"
                         >
                           <Plus className="h-3.5 w-3.5" />
-                          <span>Add College</span>
+                          <span>Suggest College</span>
                         </button>
                       </div>
                     }
@@ -525,12 +544,21 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                   {selectedCollege && (
                     <div className="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-between text-xs font-mono text-indigo-300">
                       <div className="flex items-center gap-2">
-                        <GraduationCap className="h-4 w-4 text-indigo-400" />
+                        <GraduationCap className="h-4 w-4 text-indigo-400 shrink-0" />
                         <span className="font-medium">Selected: {selectedCollege}</span>
+                        {selectedCollegeLocation && (
+                          <span className="text-[11px] text-neutral-400 border-l border-indigo-500/30 pl-2">
+                            {selectedCollegeLocation}
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSelectedCollege("")}
+                        onClick={() => {
+                          setSelectedCollege("");
+                          setSelectedCollegeId("");
+                          setSelectedCollegeLocation("");
+                        }}
                         className="text-neutral-400 hover:text-white"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -542,22 +570,32 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                 <form onSubmit={handleCreateCollege} className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">
-                      Add New College / University
+                      Suggest New College / University
                     </span>
                     <button
                       type="button"
-                      onClick={() => setShowCustomCollegeForm(false)}
+                      onClick={() => {
+                        setShowCustomCollegeForm(false);
+                        setSuggestSuccessMsg(null);
+                      }}
                       className="text-xs font-mono text-neutral-500 hover:text-white"
                     >
                       Cancel
                     </button>
                   </div>
 
+                  {suggestSuccessMsg && (
+                    <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-xs font-mono text-emerald-400 flex items-center gap-2">
+                      <Check className="h-4 w-4 shrink-0" />
+                      <span>{suggestSuccessMsg}</span>
+                    </div>
+                  )}
+
                   <input
                     type="text"
                     value={customCollegeName}
                     onChange={(e) => setCustomCollegeName(e.target.value)}
-                    placeholder="College / University Full Name *"
+                    placeholder="Official College / University Full Name *"
                     required
                     className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
                   />
@@ -584,7 +622,7 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                     disabled={isAddingCollege || !customCollegeName.trim()}
                     className="w-full py-2.5 rounded-xl bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-neutral-200 transition-colors disabled:opacity-50"
                   >
-                    {isAddingCollege ? "Adding College..." : "Save and Select College"}
+                    {isAddingCollege ? "Submitting Suggestion..." : "Submit College Suggestion"}
                   </button>
                 </form>
               )}

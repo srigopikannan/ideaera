@@ -13,6 +13,8 @@ import {
   Users,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const hackathon = await getHackathonById(id);
@@ -144,7 +146,7 @@ export default async function HackathonDetailPage({
                   </p>
                 ) : (
                   <p className="text-[10px] text-neutral-400">
-                    Schedule to be announced
+                    Date unavailable
                   </p>
                 )}
               </div>

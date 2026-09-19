@@ -320,7 +320,7 @@ export function TeammateDiscovery({
                 placeholder="All Institutions..."
                 value={collegeFilter}
                 leftIcon={<GraduationCap className="h-3.5 w-3.5 text-indigo-400" />}
-                onSearch={(q) => getCollegesAction(q, stateFilter, cityFilter)}
+                onSearch={(q) => getCollegesAction(q)}
                 onSelect={(item) => setCollegeFilter(item.name)}
                 onClear={() => setCollegeFilter("")}
                 emptyMessage="No matching colleges found."

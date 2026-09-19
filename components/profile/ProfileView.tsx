@@ -188,6 +188,11 @@ export function ProfileView({
                   <div className="flex items-center gap-1.5 text-neutral-300 bg-white/[0.03] border border-white/10 px-3 py-1 rounded-full">
                     <GraduationCap className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                     <span className="truncate max-w-[240px] sm:max-w-[320px]">{profile.college}</span>
+                    {profile.college_location && (
+                      <span className="text-[10px] text-neutral-400 border-l border-white/10 pl-1.5">
+                        {profile.college_location}
+                      </span>
+                    )}
                   </div>
                 )}
 

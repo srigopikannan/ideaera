@@ -19,6 +19,7 @@ export interface OnboardingPayload {
   age?: number;
   show_age?: boolean;
   college?: string;
+  college_id?: string;
   city?: string;
   state?: string;
   country?: string;
@@ -38,6 +39,7 @@ export async function completeOnboardingAction(payload: OnboardingPayload) {
       age: payload.age,
       show_age: payload.show_age ?? true,
       college: payload.college,
+      college_id: payload.college_id,
       city: payload.city,
       state: payload.state,
       country: payload.country,

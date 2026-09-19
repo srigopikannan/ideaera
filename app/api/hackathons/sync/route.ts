@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { CORE_VERIFIED_HACKATHONS } from "@/scripts/seed-hackathons.mjs";
+import { VERIFIED_FLAGSHIP_HACKATHONS } from "@/lib/constants/hackathons";
 
 function parseISOOrNull(val: any): string | null {
   if (!val) return null;
   try {
     const d = new Date(val);
-    if (!isNaN(d.getTime())) return d.toISOString();
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d.toISOString();
   } catch {}
   return null;
 }
@@ -15,16 +15,63 @@ const TN_KEYWORDS = [
   "tamil nadu", "chennai", "coimbatore", "madurai", "trichy", "tiruchirappalli",
   "vellore", "salem", "tirunelveli", "erode", "sivakasi", "namakkal", "thanjavur",
   "ceg", "anna univ", "shaastra", "iitm", "iit madras", "vit", "srm", "sathyabama",
-  "kpr", "ssn", "psg", "saveetha", "sns", "amrita vishwa", "cit", "saveetha"
+  "kpr", "ssn", "psg", "saveetha", "sns", "amrita vishwa", "cit"
 ];
+
+function cleanLink(rawUrl: any): string {
+  if (!rawUrl) return "https://unstop.com/hackathons";
+  let url = String(rawUrl).trim();
+  const match = url.match(/(https?:\/\/[^\s]+)$/);
+  if (match) url = match[1];
+  if (!url.startsWith("http")) {
+    url = `https://unstop.com/hackathons/${url}`;
+  }
+  return url;
+}
+
+function extractEventDates(c: any) {
+  let startDate: string | null = null;
+  let endDate: string | null = null;
+  const regDeadline = parseISOOrNull(c.regnRequirements?.end_regn_dt || c.end_regn_dt);
+
+  const rounds = c.rounds || [];
+  if (rounds.length > 0) {
+    const candidateRounds: any[] = [];
+    for (const r of rounds) {
+      for (const d of (r.details || [])) {
+        if (d.start_date && d.end_date) {
+          candidateRounds.push(d);
+        }
+      }
+    }
+
+    if (candidateRounds.length > 0) {
+      const mainRound = candidateRounds.find((d: any) =>
+        /grand finale|finale|hackathon|main round|offline round|sprint|showcase/i.test(d.title)
+      ) || candidateRounds[candidateRounds.length - 1];
+
+      if (mainRound) {
+        startDate = parseISOOrNull(mainRound.start_date);
+        endDate = parseISOOrNull(mainRound.end_date);
+      }
+    }
+  }
+
+  if (!startDate && c.start_date) {
+    startDate = parseISOOrNull(c.start_date);
+    endDate = parseISOOrNull(c.end_date || c.start_date);
+  }
+
+  return { startDate, endDate, regDeadline };
+}
 
 async function fetchLiveUnstopHackathons() {
   const tnQueries = [
     "chennai", "tamil", "coimbatore", "vellore", "trichy",
     "madurai", "srm", "vit", "saveetha", "sathyabama", "kpr", "anna university"
   ];
-  const allLive: any[] = [];
-  const seenTitles = new Set();
+  const allItems: any[] = [];
+  const seenIds = new Set<string>();
 
   for (const q of tnQueries) {
     try {
@@ -34,18 +81,17 @@ async function fetchLiveUnstopHackathons() {
       );
       if (res.ok) {
         const json = await res.json();
-        (json?.data?.data || []).forEach((item: any) => {
-          const t = item.title?.toLowerCase().trim();
-          if (t && !seenTitles.has(t)) {
-            seenTitles.add(t);
-            allLive.push(item);
+        for (const item of (json?.data?.data || [])) {
+          if (item?.id && !seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            allItems.push(item);
           }
-        });
+        }
       }
-    } catch (e) {}
+    } catch {}
   }
 
-  for (let page = 1; page <= 4; page++) {
+  for (let page = 1; page <= 3; page++) {
     try {
       const res = await fetch(
         `https://unstop.com/api/public/opportunity/search-result?opportunity=hackathons&per_page=50&page=${page}&oppstatus=open`,
@@ -53,31 +99,35 @@ async function fetchLiveUnstopHackathons() {
       );
       if (res.ok) {
         const json = await res.json();
-        (json?.data?.data || []).forEach((item: any) => {
-          const t = item.title?.toLowerCase().trim();
-          if (t && !seenTitles.has(t)) {
-            seenTitles.add(t);
-            allLive.push(item);
+        for (const item of (json?.data?.data || [])) {
+          if (item?.id && !seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            allItems.push(item);
           }
-        });
+        }
       }
-    } catch (e) {}
+    } catch {}
   }
 
-  const now = Date.now();
-  const TECH_IMAGES = [
-    "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80",
-  ];
+  const verifiedLive: any[] = [];
+  const limit = Math.min(allItems.length, 40);
 
-  return allLive
-    .map((item: any, idx: number) => {
-      const org = item.organisation?.name || "Official Institution";
-      const fullText = `${item.title} ${org} ${item.details || ""}`.toLowerCase();
+  for (let i = 0; i < limit; i++) {
+    const item = allItems[i];
+    try {
+      const detailRes = await fetch(`https://unstop.com/api/public/competition/${item.id}`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        next: { revalidate: 3600 },
+      });
+      if (!detailRes.ok) continue;
+
+      const detailJson = await detailRes.json();
+      const c = detailJson.data?.competition;
+      if (!c || !c.title) continue;
+
+      const dates = extractEventDates(c);
+      const host = c.organisation?.name || item.organisation?.name || "Official Institution";
+      const fullText = `${c.title} ${host} ${c.details || ""}`.toLowerCase();
 
       let region: "Tamil Nadu" | "India" | "Asia" | "Global" = "India";
       if (TN_KEYWORDS.some((k) => fullText.includes(k))) {
@@ -91,53 +141,54 @@ async function fetchLiveUnstopHackathons() {
       }
 
       let prizes = "Prizes & Recognition";
-      if (item.prizes?.total_prize) {
+      if (c.prizes?.total_prize) {
+        prizes =
+          typeof c.prizes.total_prize === "number"
+            ? `₹${c.prizes.total_prize.toLocaleString("en-IN")}`
+            : `₹${c.prizes.total_prize}`;
+      } else if (item.prizes?.total_prize) {
         prizes =
           typeof item.prizes.total_prize === "number"
             ? `₹${item.prizes.total_prize.toLocaleString("en-IN")}`
             : `₹${item.prizes.total_prize}`;
       }
 
-      const workingLink = item.seo_url || item.public_url || "https://unstop.com/hackathons?oppstatus=open";
+      const rawLink = c.seo_url || c.web_url || c.public_url || item.seo_url || item.public_url;
+      const link = cleanLink(rawLink);
 
-      const cleanDesc = (item.details || item.title || "")
+      const cleanDesc = (c.details || item.details || c.title || "")
         .replace(/<[^>]*>?/gm, "")
-        .slice(0, 300)
+        .slice(0, 350)
         .trim();
 
-      // Registration deadline is end_date or regnRequirements.end_regn_dt
-      const regDeadline = parseISOOrNull(item.end_date || item.regnRequirements?.end_regn_dt);
-      
-      // External API does not provide event dates in search result. DO NOT invent dates.
-      const startDate = parseISOOrNull(item.event_start_date || item.start_date);
-      const endDate = parseISOOrNull(item.event_end_date || item.end_date_event);
-      const isDateTBD = !startDate;
-      const image = item.banner_url || item.logo_url?.url || TECH_IMAGES[idx % TECH_IMAGES.length];
+      const image =
+        c.banner ||
+        c.logoUrl ||
+        item.banner_url ||
+        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80";
 
-      return {
-        title: item.title,
-        host: org,
+      const isDateTBD = !dates.startDate;
+
+      verifiedLive.push({
+        title: c.title.trim(),
+        host,
         region,
-        location: region === "Tamil Nadu" ? `${org}, Tamil Nadu` : `${org} (Pan-India / Hybrid)`,
-        start_date: startDate,
-        end_date: endDate,
-        registration_deadline: regDeadline,
+        location: region === "Tamil Nadu" ? `${host}, Tamil Nadu` : `${host} (Pan-India / Hybrid)`,
+        start_date: dates.startDate,
+        end_date: dates.endDate,
+        registration_deadline: dates.regDeadline,
         is_date_tbd: isDateTBD,
         prize_pool: prizes,
-        link: workingLink,
+        link,
         image,
         description: cleanDesc ? `${cleanDesc}...` : "Active verified collegiate sprint. Form team members on IdeaEra.",
-        min_team_size: item.team_min || 1,
-        max_team_size: item.team_max || 4,
-      };
-    })
-    .filter((h) => {
-      const deadline = h.registration_deadline ? new Date(h.registration_deadline).getTime() : NaN;
-      const end = h.end_date ? new Date(h.end_date).getTime() : NaN;
-      if (!isNaN(deadline) && deadline < now) return false;
-      if (!isNaN(end) && end < now) return false;
-      return true;
-    });
+        min_team_size: c.regnRequirements?.min_team_size || item.team_min || 1,
+        max_team_size: c.regnRequirements?.max_team_size || item.team_max || 4,
+      });
+    } catch {}
+  }
+
+  return verifiedLive;
 }
 
 export async function POST() {
@@ -156,14 +207,13 @@ export async function POST() {
     }
 
     const liveUnstop = await fetchLiveUnstopHackathons();
-    const allHackathons = [...CORE_VERIFIED_HACKATHONS, ...liveUnstop];
+    const allHackathons = [...VERIFIED_FLAGSHIP_HACKATHONS, ...liveUnstop];
 
     let syncedCount = 0;
     for (const hack of allHackathons) {
       const tbdTag = (hack as any).is_date_tbd || !hack.start_date ? " [DateTBD: true]" : "";
       const packedDescription = `[Host: ${hack.host}] [Region: ${hack.region}] [Link: ${hack.link}] [Image: ${hack.image}]${tbdTag} ${hack.description}`;
 
-      // Exact title match to prevent incorrect duplicate mappings
       const { data: existing } = await supabase
         .from("hackathons")
         .select("id")
@@ -177,7 +227,7 @@ export async function POST() {
         prize_pool: hack.prize_pool,
         start_date: hack.start_date,
         end_date: hack.end_date,
-        registration_deadline: hack.registration_deadline || hack.start_date,
+        registration_deadline: hack.registration_deadline,
         min_team_size: hack.min_team_size,
         max_team_size: hack.max_team_size,
       };
@@ -188,40 +238,14 @@ export async function POST() {
           .update(payload)
           .eq("id", existing.id);
 
-        if (uErr && uErr.code === "23502" && !hack.start_date) {
-          // Graceful fallback for not-null constraint before schema migration is applied
-          await supabase
-            .from("hackathons")
-            .update({
-              ...payload,
-              start_date: "1970-01-01T00:00:00Z",
-              end_date: "1970-01-01T00:00:00Z",
-              registration_deadline: payload.registration_deadline || "1970-01-01T00:00:00Z",
-            })
-            .eq("id", existing.id);
-          syncedCount++;
-        } else if (!uErr) {
-          syncedCount++;
-        }
+        if (!uErr) syncedCount++;
       } else {
         const { error: iErr } = await supabase.from("hackathons").insert({
           ...payload,
           organizer_id: organizerId,
         });
 
-        if (iErr && iErr.code === "23502" && !hack.start_date) {
-          // Graceful fallback for not-null constraint before schema migration is applied
-          await supabase.from("hackathons").insert({
-            ...payload,
-            organizer_id: organizerId,
-            start_date: "1970-01-01T00:00:00Z",
-            end_date: "1970-01-01T00:00:00Z",
-            registration_deadline: payload.registration_deadline || "1970-01-01T00:00:00Z",
-          });
-          syncedCount++;
-        } else if (!iErr) {
-          syncedCount++;
-        }
+        if (!iErr) syncedCount++;
       }
     }
 

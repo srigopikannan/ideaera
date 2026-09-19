@@ -46,6 +46,12 @@ export function ProfileView({
   const [connectionStatus, setConnectionStatus] = React.useState(profile.connection_status || "none");
   const [isConnecting, setIsConnecting] = React.useState(false);
 
+  React.useEffect(() => {
+    if (profile.connection_status) {
+      setConnectionStatus(profile.connection_status);
+    }
+  }, [profile.connection_status]);
+
   // Deletion modal state
   const [deleteTarget, setDeleteTarget] = React.useState<{ type: "idea" | "project"; id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -301,8 +307,12 @@ export function ProfileView({
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      await requestConnectionAction(profile.id);
-      setConnectionStatus("pending_sent");
+      const res = await requestConnectionAction(profile.id);
+      if (res?.connection?.status === "accepted") {
+        setConnectionStatus("connected");
+      } else {
+        setConnectionStatus("pending_sent");
+      }
     } catch {}
     setIsConnecting(false);
   };

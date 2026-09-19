@@ -11,6 +11,7 @@ interface LivingSynergyNetworkProps {
   onConnect: (userId: string) => Promise<void>;
   connectingMap: Record<string, boolean>;
   connectedMap: Record<string, boolean>;
+  pendingMap?: Record<string, boolean>;
 }
 
 export function LivingSynergyNetwork({
@@ -18,11 +19,23 @@ export function LivingSynergyNetwork({
   onConnect,
   connectingMap,
   connectedMap,
+  pendingMap = {},
 }: LivingSynergyNetworkProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const currentTimeRef = React.useRef<number>(0);
   const [activeRec, setActiveRec] = React.useState<MatchRecommendation | null>(
     recommendations.length > 0 ? recommendations[0] : null
   );
+
+  React.useEffect(() => {
+    if (recommendations.length > 0) {
+      if (!activeRec || !recommendations.some((r) => r.profile.id === activeRec.profile.id)) {
+        setActiveRec(recommendations[0]);
+      }
+    } else {
+      setActiveRec(null);
+    }
+  }, [recommendations]);
 
   // Position nodes radially around the center with varying orbital radius and angular speed
   const nodePositions = React.useMemo(() => {
@@ -68,6 +81,7 @@ export function LivingSynergyNetwork({
 
     const render = () => {
       t += 0.016;
+      currentTimeRef.current = t;
       ctx.clearRect(0, 0, width, height);
 
       const cx = width / 2;
@@ -189,14 +203,16 @@ export function LivingSynergyNetwork({
     const cy = rect.height / 2;
     const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.44) / 320);
     const scale = Math.max(0.4, baseScale);
+    const t = currentTimeRef.current;
 
     let closest: MatchRecommendation | null = null;
     let minDist = 34;
 
     for (const node of nodePositions) {
+      const currentAngle = node.angle + t * node.speed;
       const dist = node.baseDist * scale;
-      const nx = cx + Math.cos(node.angle) * dist;
-      const ny = cy + Math.sin(node.angle) * (dist * 0.75);
+      const nx = cx + Math.cos(currentAngle) * dist;
+      const ny = cy + Math.sin(currentAngle) * (dist * 0.75);
       const d = Math.hypot(mx - nx, my - ny);
       if (d < minDist) {
         minDist = d;
@@ -219,14 +235,16 @@ export function LivingSynergyNetwork({
     const cy = rect.height / 2;
     const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.44) / 320);
     const scale = Math.max(0.4, baseScale);
+    const t = currentTimeRef.current;
 
     let closest: MatchRecommendation | null = null;
     let minDist = 38;
 
     for (const node of nodePositions) {
+      const currentAngle = node.angle + t * node.speed;
       const dist = node.baseDist * scale;
-      const nx = cx + Math.cos(node.angle) * dist;
-      const ny = cy + Math.sin(node.angle) * (dist * 0.75);
+      const nx = cx + Math.cos(currentAngle) * dist;
+      const ny = cy + Math.sin(currentAngle) * (dist * 0.75);
       const d = Math.hypot(mx - nx, my - ny);
       if (d < minDist) {
         minDist = d;
@@ -327,7 +345,8 @@ export function LivingSynergyNetwork({
                 <Check className="h-4 w-4" />
                 <span>Quantum Bond Established</span>
               </div>
-            ) : activeRec.profile.connection_status === "pending_sent" ? (
+            ) : pendingMap[activeRec.profile.id] ||
+              activeRec.profile.connection_status === "pending_sent" ? (
               <div className="w-full py-2.5 rounded-full border border-white/10 bg-white/[0.03] text-neutral-400 text-xs font-mono text-center">
                 Signal Transmitted
               </div>

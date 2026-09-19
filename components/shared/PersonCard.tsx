@@ -29,13 +29,23 @@ export function PersonCard({ person, featured = false }: PersonCardProps) {
   const [status, setStatus] = React.useState(person.connection_status || "none");
   const [isLoading, setIsLoading] = React.useState(false);
 
+  React.useEffect(() => {
+    if (person.connection_status) {
+      setStatus(person.connection_status);
+    }
+  }, [person.connection_status]);
+
   const handleConnect = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsLoading(true);
     try {
-      await requestConnectionAction(person.id);
-      setStatus("pending_sent");
+      const res = await requestConnectionAction(person.id);
+      if (res?.connection?.status === "accepted") {
+        setStatus("connected");
+      } else {
+        setStatus("pending_sent");
+      }
     } catch (err) {
       console.error(err);
     } finally {

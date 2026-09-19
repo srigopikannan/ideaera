@@ -13,12 +13,34 @@ function mapIdea(raw: any, isLiked: boolean = false): Idea {
     parsedTags = [raw.category];
   }
 
+  // Handle problem and solution distinctly
+  let problem = raw.problem ? String(raw.problem).trim() : null;
+  let solution = raw.solution ? String(raw.solution).trim() : null;
+
+  // If problem/solution are not populated separately in DB, try splitting description if it has multiple sections
+  if (!problem && !solution && raw.description) {
+    const parts = raw.description.split(/\r?\n\r?\n/).map((p: string) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      problem = parts[0];
+      solution = parts.slice(1).join("\n\n");
+    } else {
+      problem = raw.description;
+      solution = null;
+    }
+  }
+
+  const description =
+    raw.description ||
+    (problem && solution ? `${problem}\n\n${solution}` : problem || solution || "");
+
   return {
     id: raw.id,
     author_id: raw.creator_id || raw.author_id,
     author: authorProfile,
     title: raw.title,
-    description: raw.description || `${raw.problem || ""}\n\n${raw.solution || ""}`.trim(),
+    description,
+    problem,
+    solution,
     category: raw.category || "AI & Machine Learning",
     tags: parsedTags,
     status: (raw.stage?.toLowerCase() === "implemented" ? "implemented" : raw.stage?.toLowerCase() === "in_progress" ? "in_progress" : "open") as any,
@@ -127,16 +149,19 @@ export async function createIdea(data: {
     throw new Error("You must be logged in to share an idea.");
   }
 
-  const problem = (data.problem && data.problem.trim()) || data.description;
-  const solution = (data.solution && data.solution.trim()) || data.description;
+  const problem = data.problem !== undefined && data.problem !== null ? data.problem.trim() : null;
+  const solution = data.solution !== undefined && data.solution !== null ? data.solution.trim() : null;
+  const description =
+    data.description?.trim() ||
+    (problem && solution ? `${problem}\n\n${solution}` : problem || solution || data.title.trim());
 
   const { data: inserted, error } = await supabase
     .from("ideas")
     .insert({
-      title: data.title,
-      description: data.description,
-      problem: problem,
-      solution: solution,
+      title: data.title.trim(),
+      description,
+      problem,
+      solution,
       category: data.category,
       stage: "Idea",
       visibility: "public",
@@ -185,14 +210,17 @@ export async function updateIdea(
     throw new Error("Unauthorized: You do not have permission to edit this idea.");
   }
 
-  const problem = (data.problem && data.problem.trim()) || data.description;
-  const solution = (data.solution && data.solution.trim()) || data.description;
+  const problem = data.problem !== undefined && data.problem !== null ? data.problem.trim() : null;
+  const solution = data.solution !== undefined && data.solution !== null ? data.solution.trim() : null;
+  const description =
+    data.description?.trim() ||
+    (problem && solution ? `${problem}\n\n${solution}` : problem || solution || data.title.trim());
 
   const { data: updated, error } = await supabase
     .from("ideas")
     .update({
       title: data.title.trim(),
-      description: data.description.trim(),
+      description,
       problem,
       solution,
       category: data.category,

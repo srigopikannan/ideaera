@@ -32,8 +32,25 @@ export function EditIdeaModal({
   const [tags, setTags] = React.useState(
     Array.isArray(idea.tags) ? idea.tags.join(", ") : ""
   );
-  const [problem, setProblem] = React.useState(idea.problem || idea.description || "");
-  const [solution, setSolution] = React.useState(idea.solution || idea.description || "");
+  const resolveInitialValues = (i: Idea) => {
+    let p = i.problem?.trim() || "";
+    let s = i.solution?.trim() || "";
+    if (!p && !s && i.description) {
+      const parts = i.description.split(/\r?\n\r?\n/).map((part) => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        p = parts[0];
+        s = parts.slice(1).join("\n\n");
+      } else {
+        p = i.description.trim();
+        s = "";
+      }
+    }
+    return { p, s };
+  };
+
+  const initialVals = resolveInitialValues(idea);
+  const [problem, setProblem] = React.useState(initialVals.p);
+  const [solution, setSolution] = React.useState(initialVals.s);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -42,8 +59,9 @@ export function EditIdeaModal({
       setTitle(idea.title || "");
       setCategory(idea.category || CATEGORIES[0]);
       setTags(Array.isArray(idea.tags) ? idea.tags.join(", ") : "");
-      setProblem(idea.problem || idea.description || "");
-      setSolution(idea.solution || idea.description || "");
+      const { p, s } = resolveInitialValues(idea);
+      setProblem(p);
+      setSolution(s);
       setError(null);
     }
   }, [isOpen, idea]);
@@ -72,13 +90,17 @@ export function EditIdeaModal({
     setIsSubmitting(true);
     setError(null);
 
+    const pTrim = problem.trim();
+    const sTrim = solution.trim();
+    const desc = (pTrim && sTrim) ? `${pTrim}\n\n${sTrim}` : (pTrim || sTrim || title.trim());
+
     const formData = new FormData();
     formData.append("id", idea.id);
     formData.append("title", title.trim());
     formData.append("category", category);
-    formData.append("description", problem.trim() || title.trim());
-    formData.append("problem", problem.trim());
-    formData.append("solution", solution.trim());
+    formData.append("description", desc);
+    formData.append("problem", pTrim);
+    formData.append("solution", sTrim);
     formData.append("tags", tags);
 
     try {
@@ -89,9 +111,9 @@ export function EditIdeaModal({
         onUpdated({
           title: title.trim(),
           category,
-          description: problem.trim() || title.trim(),
-          problem: problem.trim(),
-          solution: solution.trim(),
+          description: desc,
+          problem: pTrim,
+          solution: sTrim,
           tags: tags
             .split(",")
             .map((t) => t.trim())

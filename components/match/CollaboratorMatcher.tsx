@@ -30,7 +30,24 @@ export function CollaboratorMatcher({
   const [viewMode, setViewMode] = React.useState<"network" | "dossiers">("network");
   const [minScore, setMinScore] = React.useState<number>(0);
   const [connectingMap, setConnectingMap] = React.useState<Record<string, boolean>>({});
-  const [connectedMap, setConnectedMap] = React.useState<Record<string, boolean>>({});
+  const [connectedMap, setConnectedMap] = React.useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    initialRecommendations.forEach((r) => {
+      if (r.profile.connection_status === "connected") {
+        init[r.profile.id] = true;
+      }
+    });
+    return init;
+  });
+  const [pendingMap, setPendingMap] = React.useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    initialRecommendations.forEach((r) => {
+      if (r.profile.connection_status === "pending_sent") {
+        init[r.profile.id] = true;
+      }
+    });
+    return init;
+  });
 
   const filtered = React.useMemo(() => {
     return recommendations.filter((r) => (r.matchScore || 0) >= minScore);
@@ -39,8 +56,12 @@ export function CollaboratorMatcher({
   const handleConnect = async (targetUserId: string) => {
     setConnectingMap((prev) => ({ ...prev, [targetUserId]: true }));
     try {
-      await requestConnectionAction(targetUserId);
-      setConnectedMap((prev) => ({ ...prev, [targetUserId]: true }));
+      const res = await requestConnectionAction(targetUserId);
+      if (res?.connection?.status === "accepted") {
+        setConnectedMap((prev) => ({ ...prev, [targetUserId]: true }));
+      } else {
+        setPendingMap((prev) => ({ ...prev, [targetUserId]: true }));
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -134,6 +155,7 @@ export function CollaboratorMatcher({
           onConnect={handleConnect}
           connectingMap={connectingMap}
           connectedMap={connectedMap}
+          pendingMap={pendingMap}
         />
       ) : (
         /* Holographic Dossiers Grid */
@@ -142,7 +164,9 @@ export function CollaboratorMatcher({
             const isConnected =
               connectedMap[rec.profile.id] ||
               rec.profile.connection_status === "connected";
-            const isPending = rec.profile.connection_status === "pending_sent";
+            const isPending =
+              pendingMap[rec.profile.id] ||
+              rec.profile.connection_status === "pending_sent";
             const isConnecting = connectingMap[rec.profile.id];
 
             return (

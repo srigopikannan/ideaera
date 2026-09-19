@@ -56,6 +56,25 @@ export function IdeaDetailView({
   const [copied, setCopied] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
 
+  // Section 2 & 3 distinct content resolution
+  const problemContent = React.useMemo(() => {
+    if (currentIdea.problem?.trim()) return currentIdea.problem.trim();
+    if (!currentIdea.description) return "Problem statement not articulated.";
+    const parts = currentIdea.description.split(/\r?\n\r?\n/).map((p) => p.trim()).filter(Boolean);
+    return parts[0] || currentIdea.description;
+  }, [currentIdea.problem, currentIdea.description]);
+
+  const solutionContent = React.useMemo(() => {
+    if (currentIdea.solution?.trim()) return currentIdea.solution.trim();
+    if (!currentIdea.description) return "Proposed architectural blueprint under synthesis.";
+    const parts = currentIdea.description.split(/\r?\n\r?\n/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      return parts.slice(1).join("\n\n");
+    }
+    // If description has only 1 part and no explicit solution, do NOT repeat problemContent!
+    return "Proposed architectural blueprint under synthesis.";
+  }, [currentIdea.solution, currentIdea.description]);
+
   // Scroll tracking for 6-dimensional narrative
   const [scrollProgress, setScrollProgress] = React.useState(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -311,7 +330,7 @@ export function IdeaDetailView({
             The Structural Friction
           </h2>
           <div className="text-neutral-300 text-base sm:text-lg font-light leading-relaxed whitespace-pre-line max-w-3xl">
-            {currentIdea.problem || currentIdea.description.split("\n\n")[0] || currentIdea.description}
+            {problemContent}
           </div>
         </div>
       </section>
@@ -328,7 +347,7 @@ export function IdeaDetailView({
             Proposed Model & Synthesis
           </h2>
           <div className="text-neutral-300 text-base sm:text-lg font-light leading-relaxed whitespace-pre-line">
-            {currentIdea.solution || currentIdea.description.split("\n\n")[1] || currentIdea.description}
+            {solutionContent}
           </div>
 
           {/* Tags */}
@@ -359,15 +378,30 @@ export function IdeaDetailView({
             <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 block">
               ORIGINATOR
             </span>
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-lg">
-                {(idea.author?.full_name || "I").charAt(0).toUpperCase()}
+            <Link
+              href={"/people/" + (currentIdea.author?.username || "creator")}
+              className="flex items-center gap-3 group/author hover:opacity-90 transition-opacity"
+            >
+              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-lg overflow-hidden">
+                {currentIdea.author?.avatar_url ? (
+                  <img
+                    src={currentIdea.author.avatar_url}
+                    alt={currentIdea.author.full_name || "Author"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  (currentIdea.author?.full_name || "I").charAt(0).toUpperCase()
+                )}
               </div>
               <div>
-                <h4 className="text-base font-light text-white">{idea.author?.full_name || "Innovator"}</h4>
-                <p className="text-xs font-mono text-neutral-400">@{idea.author?.username || "creator"}</p>
+                <h4 className="text-base font-light text-white group-hover/author:text-indigo-300 transition-colors">
+                  {currentIdea.author?.full_name || "Innovator"}
+                </h4>
+                <p className="text-xs font-mono text-neutral-400">
+                  @{currentIdea.author?.username || "creator"}
+                </p>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="p-6 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-3">

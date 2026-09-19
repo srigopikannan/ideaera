@@ -26,12 +26,14 @@ interface ConnectionsManagerProps {
   initialAll: Connection[];
   initialIncoming: Connection[];
   initialSent: Connection[];
+  currentUserId?: string;
 }
 
 export function ConnectionsManager({
   initialAll,
   initialIncoming,
   initialSent,
+  currentUserId,
 }: ConnectionsManagerProps) {
   const [activeTab, setActiveTab] = React.useState<"all" | "incoming" | "sent">("all");
   const [allConnections, setAllConnections] = React.useState<Connection[]>(initialAll);
@@ -150,7 +152,14 @@ export function ConnectionsManager({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {currentList.map((conn) => {
-            const partner = activeTab === "sent" ? conn.receiver : conn.requester;
+            const partner =
+              activeTab === "sent"
+                ? conn.receiver
+                : activeTab === "incoming"
+                ? conn.requester
+                : conn.requester_id === currentUserId
+                ? conn.receiver
+                : conn.requester;
             const displayName = partner?.full_name || partner?.username || "Innovator";
             const displayUsername = partner?.username || "peer";
             const displayHeadline = partner?.headline;

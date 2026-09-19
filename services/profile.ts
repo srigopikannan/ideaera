@@ -82,6 +82,9 @@ export async function getCurrentUserProfile(): Promise<Profile> {
 export async function getProfileByUsername(username: string): Promise<Profile | null> {
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id;
+
     const { data, error } = await supabase
       .from("profiles")
       .select("*, user_skills(*, skill:skills(*))")
@@ -89,7 +92,33 @@ export async function getProfileByUsername(username: string): Promise<Profile | 
       .maybeSingle();
 
     if (data && !error) {
-      return formatProfile(data);
+      const formatted = formatProfile(data);
+      let connectionStatus: "none" | "pending_sent" | "pending_received" | "connected" = "none";
+
+      if (currentUserId && currentUserId !== formatted.id) {
+        try {
+          const { data: conn } = await supabase
+            .from("connections")
+            .select("requester_id, receiver_id, status")
+            .or(`and(requester_id.eq.${currentUserId},receiver_id.eq.${formatted.id}),and(requester_id.eq.${formatted.id},receiver_id.eq.${currentUserId})`)
+            .maybeSingle();
+
+          if (conn) {
+            if (conn.status === "accepted") {
+              connectionStatus = "connected";
+            } else if (conn.status === "pending") {
+              connectionStatus = conn.requester_id === currentUserId ? "pending_sent" : "pending_received";
+            }
+          }
+        } catch (connErr) {
+          console.error("Error fetching connection status in getProfileByUsername:", connErr);
+        }
+      }
+
+      return {
+        ...formatted,
+        connection_status: connectionStatus,
+      };
     }
   } catch (err) {
     console.error("Error in getProfileByUsername:", err);
@@ -125,7 +154,38 @@ export async function getAllProfiles(query?: string, skillFilter?: string): Prom
         );
       }
 
-      return results;
+      // Fetch connection statuses for current user
+      const statusMap: Record<string, "none" | "pending_sent" | "pending_received" | "connected"> = {};
+      if (currentUserId) {
+        try {
+          const { data: userConns } = await supabase
+            .from("connections")
+            .select("requester_id, receiver_id, status")
+            .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+
+          if (userConns) {
+            for (const c of userConns) {
+              const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
+              if (c.status === "accepted") {
+                statusMap[otherId] = "connected";
+              } else if (c.status === "pending") {
+                if (c.requester_id === currentUserId) {
+                  statusMap[otherId] = "pending_sent";
+                } else {
+                  statusMap[otherId] = "pending_received";
+                }
+              }
+            }
+          }
+        } catch (connErr) {
+          console.error("Error fetching connections in getAllProfiles:", connErr);
+        }
+      }
+
+      return results.map((p) => ({
+        ...p,
+        connection_status: statusMap[p.id] || "none",
+      }));
     }
   } catch (err) {
     console.error("Error in getAllProfiles:", err);

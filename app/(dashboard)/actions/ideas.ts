@@ -5,15 +5,21 @@ import { revalidatePath } from "next/cache";
 
 export async function createIdeaAction(formData: FormData) {
   try {
-    const title = formData.get("title") as string;
-    const description = formData.get("description") as string;
-    const category = formData.get("category") as string;
-    const rawTags = formData.get("tags") as string;
-    const problem = (formData.get("problem") as string) || description;
-    const solution = (formData.get("solution") as string) || description;
+    const title = (formData.get("title") as string)?.trim() || "";
+    const category = (formData.get("category") as string)?.trim() || "";
+    const rawTags = (formData.get("tags") as string)?.trim() || "";
+    const rawProblem = formData.get("problem") as string | null;
+    const rawSolution = formData.get("solution") as string | null;
+    const rawDesc = formData.get("description") as string | null;
 
-    if (!title || !description || !category) {
-      return { error: "Please fill in all required fields (Title, Category, and Description)." };
+    const problem = rawProblem ? rawProblem.trim() : "";
+    const solution = rawSolution ? rawSolution.trim() : "";
+    const description =
+      rawDesc?.trim() ||
+      (problem && solution ? `${problem}\n\n${solution}` : problem || solution || title);
+
+    if (!title || (!description && !problem && !solution) || !category) {
+      return { error: "Please fill in all required fields (Title, Category, and Concept Details)." };
     }
 
     const tags = rawTags
@@ -25,8 +31,8 @@ export async function createIdeaAction(formData: FormData) {
       description,
       category,
       tags,
-      problem,
-      solution,
+      problem: problem || undefined,
+      solution: solution || undefined,
     });
 
     revalidatePath("/ideas");
@@ -41,19 +47,25 @@ export async function createIdeaAction(formData: FormData) {
 export async function updateIdeaAction(formData: FormData) {
   try {
     const id = formData.get("id") as string;
-    const title = formData.get("title") as string;
-    const description = formData.get("description") as string;
-    const category = formData.get("category") as string;
-    const rawTags = formData.get("tags") as string;
-    const problem = (formData.get("problem") as string) || description;
-    const solution = (formData.get("solution") as string) || description;
+    const title = (formData.get("title") as string)?.trim() || "";
+    const category = (formData.get("category") as string)?.trim() || "";
+    const rawTags = (formData.get("tags") as string)?.trim() || "";
+    const rawProblem = formData.get("problem") as string | null;
+    const rawSolution = formData.get("solution") as string | null;
+    const rawDesc = formData.get("description") as string | null;
+
+    const problem = rawProblem ? rawProblem.trim() : "";
+    const solution = rawSolution ? rawSolution.trim() : "";
+    const description =
+      rawDesc?.trim() ||
+      (problem && solution ? `${problem}\n\n${solution}` : problem || solution || title);
 
     if (!id) {
       return { error: "Idea ID is required." };
     }
 
-    if (!title || !description || !category) {
-      return { error: "Please fill in all required fields (Title, Category, and Description)." };
+    if (!title || (!description && !problem && !solution) || !category) {
+      return { error: "Please fill in all required fields (Title, Category, and Concept Details)." };
     }
 
     const tags = rawTags
@@ -65,8 +77,8 @@ export async function updateIdeaAction(formData: FormData) {
       description,
       category,
       tags,
-      problem,
-      solution,
+      problem: problem || undefined,
+      solution: solution || undefined,
     });
 
     revalidatePath("/ideas");

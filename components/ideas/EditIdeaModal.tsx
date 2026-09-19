@@ -148,7 +148,7 @@ export function EditIdeaModal({
               </h3>
             </div>
             <p className="text-xs text-neutral-400 font-mono">
-              Modify the architectural thesis and parameters of this idea
+              Modify the details and parameters of this idea
             </p>
           </div>
           <button

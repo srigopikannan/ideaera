@@ -28,6 +28,19 @@ export function formatDateTime(dateString: string): string {
   }).format(date);
 }
 
+export function formatFullDateTime(dateString: string): string {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 export function formatTimeAgo(dateString: string): string {
   if (!dateString) return "";
   const date = new Date(dateString);

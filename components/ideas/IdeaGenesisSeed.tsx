@@ -41,7 +41,7 @@ export function IdeaGenesisSeed({
     let stage = "Nascent Spark";
     let statusColor = "text-neutral-400";
     if (score >= 25 && score < 50) {
-      stage = "Forming Thesis";
+      stage = "Forming Idea";
       statusColor = "text-indigo-400";
     } else if (score >= 50 && score < 75) {
       stage = "Articulated Model";
@@ -299,7 +299,7 @@ export function IdeaGenesisSeed({
                 (title.trim().length > 3 ? "bg-emerald-400" : "bg-neutral-600")
               }
             />
-            <span>Thesis Title</span>
+            <span>Idea Title</span>
           </div>
 
           <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400">

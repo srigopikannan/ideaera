@@ -14,6 +14,14 @@ export interface Profile {
   bio?: string | null;
   headline?: string | null;
   location?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  show_location?: boolean;
+  college?: string | null;
+  age?: number | null;
+  show_age?: boolean;
+  onboarding_completed?: boolean;
   website?: string | null;
   portfolio_url?: string | null;
   github_url?: string | null;
@@ -31,17 +39,33 @@ export interface Skill {
   name: string;
 }
 
+export interface IdeaVersion {
+  version_number?: number;
+  version?: number;
+  created_at: string;
+  changed_by?: string;
+  change_summary?: string;
+  changes_summary?: string;
+}
+
 export interface Idea {
   id: string;
+  display_id?: string;
   author_id: string;
   author?: Profile;
   title: string;
   description: string;
   problem?: string | null;
   solution?: string | null;
+  goals?: string | null;
+  skills_needed?: string[];
+  collaboration_info?: string | null;
+  version?: number;
+  version_history?: IdeaVersion[];
   category: string;
   tags: string[];
   status: 'open' | 'in_progress' | 'implemented';
+  visibility?: 'public' | 'community' | 'selected' | 'private';
   likes_count: number;
   comments_count: number;
   created_at: string;

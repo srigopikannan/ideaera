@@ -1,4 +1,4 @@
-import { getAllProfiles } from "@/services/profile";
+import { getAllProfiles, getCurrentUserProfile } from "@/services/profile";
 import { PeopleDirectory } from "@/components/people/PeopleDirectory";
 import { Users, Trophy, Sparkles } from "lucide-react";
 
@@ -10,10 +10,13 @@ export const metadata = {
 export default async function PeoplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ hackathon?: string; action?: string }>;
+  searchParams: Promise<{ hackathon?: string; action?: string; skills?: string }>;
 }) {
-  const { hackathon, action } = await searchParams;
-  const people = await getAllProfiles();
+  const { hackathon, action, skills } = await searchParams;
+  const [people, currentUser] = await Promise.all([
+    getAllProfiles(),
+    getCurrentUserProfile().catch(() => null),
+  ]);
   const isFormingTeam = Boolean(hackathon || action === "form-team");
 
   return (
@@ -53,7 +56,12 @@ export default async function PeoplePage({
       )}
 
       {/* Directory with Filters */}
-      <PeopleDirectory initialPeople={people} />
+      <PeopleDirectory
+        initialPeople={people}
+        currentUser={currentUser}
+        initialHackathon={hackathon}
+        initialSkills={skills ? skills.split(",").map((s) => s.trim()).filter(Boolean) : []}
+      />
     </div>
   );
 }

@@ -14,6 +14,9 @@ import {
   X,
   CornerDownLeft,
   Sparkles,
+  GraduationCap,
+  MapPin,
+  Hash,
 } from "lucide-react";
 import { Github, Linkedin } from "@/components/ui/brand-icons";
 import { cn } from "@/lib/utils";
@@ -164,7 +167,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-indigo-400">
                 <Lightbulb className="h-3.5 w-3.5" />
-                <span>Sparks & Theses</span>
+                <span>Ideas & Sparks</span>
               </div>
               <div className="space-y-1">
                 {results.ideas.map((idea) => (
@@ -174,9 +177,16 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                     className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
                   >
                     <div>
-                      <p className="text-sm font-light text-white group-hover:text-indigo-200 transition-colors">
-                        {idea.title}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-light text-white group-hover:text-indigo-200 transition-colors">
+                          {idea.title}
+                        </p>
+                        {idea.display_id && (
+                          <span className="text-[10px] font-mono text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                            {idea.display_id}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
                         {idea.category}
                       </span>
@@ -202,20 +212,50 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                     onClick={() => handleNavigate(`/people/${person.username}`)}
                     className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-xs font-mono text-cyan-300">
-                        {person.name.slice(0, 2).toUpperCase()}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-9 w-9 rounded-full bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-xs font-mono text-cyan-300 overflow-hidden shrink-0">
+                        {person.avatar_url ? (
+                          <img src={person.avatar_url} alt={person.name} className="h-full w-full object-cover" />
+                        ) : (
+                          person.name.slice(0, 2).toUpperCase()
+                        )}
                       </div>
-                      <div>
-                        <p className="text-sm font-light text-white group-hover:text-cyan-200 transition-colors">
-                          {person.name}
-                        </p>
-                        <p className="text-[10px] font-mono text-neutral-400">
-                          {person.headline || `@${person.username}`}
-                        </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-white group-hover:text-cyan-200 transition-colors truncate">
+                            {person.name}
+                          </p>
+                          <span className="text-[10px] font-mono text-neutral-500">
+                            @{person.username}
+                          </span>
+                        </div>
+                        {person.headline && (
+                          <p className="text-[11px] font-mono text-neutral-400 truncate">
+                            {person.headline}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-mono text-neutral-500">
+                          {person.college && (
+                            <span className="flex items-center gap-1 text-neutral-400">
+                              <GraduationCap className="h-3 w-3 text-indigo-400" />
+                              <span className="truncate max-w-[160px]">{person.college}</span>
+                            </span>
+                          )}
+                          {(person.city || person.location) && (
+                            <span className="flex items-center gap-1 text-neutral-400">
+                              <MapPin className="h-3 w-3 text-cyan-400" />
+                              <span className="truncate max-w-[120px]">{person.city || person.location}</span>
+                            </span>
+                          )}
+                          {person.skills && person.skills.length > 0 && (
+                            <span className="text-indigo-300">
+                              {person.skills.slice(0, 2).join(", ")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
                   </button>
                 ))}
               </div>

@@ -15,7 +15,7 @@ interface LivingEmptyStateProps {
 
 export function LivingEmptyState({
   title = "YOUR IDEA FIELD IS QUIET.",
-  subtitle = "Be the first to synthesize a thesis and ignite possibilities.",
+  subtitle = "Be the first to share an idea and ignite possibilities.",
   actionText = "Ignite Concept",
   actionHref = "/ideas/create",
   className = "",

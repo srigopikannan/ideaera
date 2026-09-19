@@ -214,7 +214,7 @@ export default function CreateIdeaPage() {
     setError(null);
 
     if (!title.trim() || (!problem.trim() && !solution.trim())) {
-      setError("Please provide a title and articulate the thesis.");
+      setError("Please provide a title and describe your idea.");
       return;
     }
 
@@ -279,11 +279,11 @@ export default function CreateIdeaPage() {
         {/* 1. Colossal Fluid Title Input */}
         <div className="text-center space-y-2">
           <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-500 block">
-            01 // THESIS PROPOSITION
+            01 // IDEA PROPOSITION
           </span>
           <input
             type="text"
-            placeholder="Name your thesis..."
+            placeholder="Name your idea..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full text-center text-2xl sm:text-5xl lg:text-6xl font-extralight text-white bg-transparent placeholder:text-neutral-700 focus:outline-none tracking-tight leading-tight"

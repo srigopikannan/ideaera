@@ -105,7 +105,7 @@ export default function SignupPage() {
         setSuccessNotice("Verification link sent! Please check your email inbox (and spam folder) to confirm your account.");
         setIsLoading(false);
       } else {
-        router.push("/profile");
+        router.push("/onboarding");
         router.refresh();
       }
     } catch (err: any) {

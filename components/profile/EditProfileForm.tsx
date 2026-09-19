@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock } from "lucide-react";
 import { Github, Linkedin } from "@/components/ui/brand-icons";
 
 interface EditProfileFormProps {
@@ -21,11 +21,19 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   const [fullName, setFullName] = React.useState(initialProfile.full_name || "");
   const [headline, setHeadline] = React.useState(initialProfile.headline || "");
   const [bio, setBio] = React.useState(initialProfile.bio || "");
+  const [college, setCollege] = React.useState(initialProfile.college || "");
+  const [age, setAge] = React.useState(initialProfile.age ? String(initialProfile.age) : "");
+  const [showAge, setShowAge] = React.useState(initialProfile.show_age ?? true);
+  const [city, setCity] = React.useState(initialProfile.city || "");
+  const [state, setState] = React.useState(initialProfile.state || "");
+  const [country, setCountry] = React.useState(initialProfile.country || "India");
+  const [showLocation, setShowLocation] = React.useState(initialProfile.show_location ?? true);
   const [location, setLocation] = React.useState(initialProfile.location || "");
   const [website, setWebsite] = React.useState(initialProfile.website || initialProfile.portfolio_url || "");
   const [githubUrl, setGithubUrl] = React.useState(initialProfile.github_url || "");
   const [linkedinUrl, setLinkedinUrl] = React.useState(initialProfile.linkedin_url || "");
   const [skills, setSkills] = React.useState(initialProfile.skills?.join(", ") || "");
+  const [interests, setInterests] = React.useState(initialProfile.interests?.join(", ") || "");
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [savedSuccess, setSavedSuccess] = React.useState(false);
@@ -37,15 +45,25 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
     setSavedSuccess(false);
     setErrorMsg(null);
 
+    const fullLocation = [city, state, country].filter(Boolean).join(", ") || location;
+
     const formData = new FormData();
     formData.append("full_name", fullName);
     formData.append("headline", headline);
     formData.append("bio", bio);
-    formData.append("location", location);
+    formData.append("college", college);
+    if (age) formData.append("age", age);
+    formData.append("show_age", showAge ? "true" : "false");
+    formData.append("city", city);
+    formData.append("state", state);
+    formData.append("country", country);
+    formData.append("show_location", showLocation ? "true" : "false");
+    formData.append("location", fullLocation);
     formData.append("website", website);
     formData.append("github_url", githubUrl);
     formData.append("linkedin_url", linkedinUrl);
     formData.append("skills", skills);
+    formData.append("interests", interests);
 
     try {
       const res = await updateProfileAction(formData);
@@ -142,6 +160,82 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
               />
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                  College / University
+                </label>
+                <Input
+                  value={college}
+                  onChange={(e) => setCollege(e.target.value)}
+                  placeholder="e.g. PSG College of Technology, Coimbatore"
+                  leftIcon={<GraduationCap className="h-4 w-4" />}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Age
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showAge}
+                      onChange={(e) => setShowAge(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    <span>Show publicly</span>
+                  </label>
+                </div>
+                <Input
+                  type="number"
+                  min="13"
+                  max="120"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g. 21"
+                  leftIcon={<Calendar className="h-4 w-4" />}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 p-4 rounded-xl border border-border/60 bg-surface/50">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  Location (City, State, Country)
+                </span>
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showLocation}
+                    onChange={(e) => setShowLocation(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <span>Show publicly</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City (e.g. Coimbatore)"
+                />
+                <Input
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  placeholder="State (e.g. Tamil Nadu)"
+                />
+                <Input
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="Country (e.g. India)"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-foreground mb-1.5 block">
                 Skills (Comma-separated)
@@ -156,18 +250,18 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
               </p>
             </div>
 
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                Interests & Focus Domains (Comma-separated)
+              </label>
+              <Input
+                value={interests}
+                onChange={(e) => setInterests(e.target.value)}
+                placeholder="Autonomous Agents, Clean Energy, Web3, Distributed Systems"
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">
-                  Location
-                </label>
-                <Input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Chennai, Tamil Nadu"
-                  leftIcon={<MapPin className="h-4 w-4" />}
-                />
-              </div>
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">

@@ -33,17 +33,26 @@ function mapIdea(raw: any, isLiked: boolean = false): Idea {
     raw.description ||
     (problem && solution ? `${problem}\n\n${solution}` : problem || solution || "");
 
+  const displayId = `IDEA-${String(raw.id).substring(0, 8).toUpperCase()}`;
+
   return {
     id: raw.id,
+    display_id: displayId,
     author_id: raw.creator_id || raw.author_id,
     author: authorProfile,
     title: raw.title,
     description,
     problem,
     solution,
+    goals: raw.goals || null,
+    skills_needed: Array.isArray(raw.skills_needed) ? raw.skills_needed : [],
+    collaboration_info: raw.collaboration_info || null,
+    version: raw.version || 1,
+    version_history: Array.isArray(raw.version_history) ? raw.version_history : [],
     category: raw.category || "AI & Machine Learning",
     tags: parsedTags,
     status: (raw.stage?.toLowerCase() === "implemented" ? "implemented" : raw.stage?.toLowerCase() === "in_progress" ? "in_progress" : "open") as any,
+    visibility: raw.visibility || "public",
     likes_count: raw.likes_count || 0,
     comments_count: raw.comments_count || 0,
     created_at: raw.created_at,
@@ -198,7 +207,7 @@ export async function updateIdea(
   // 1. Fetch idea to verify existence and ownership
   const { data: idea, error: fetchErr } = await supabase
     .from("ideas")
-    .select("id, creator_id")
+    .select("id, creator_id, version, version_history, category")
     .eq("id", id)
     .maybeSingle();
 
@@ -216,23 +225,79 @@ export async function updateIdea(
     data.description?.trim() ||
     (problem && solution ? `${problem}\n\n${solution}` : problem || solution || data.title.trim());
 
-  const { data: updated, error } = await supabase
-    .from("ideas")
-    .update({
-      title: data.title.trim(),
-      description,
-      problem,
-      solution,
-      category: data.category,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("creator_id", user.id)
-    .select("*, creator:profiles!creator_id(*)")
-    .single();
+  const currentVer = typeof idea.version === "number" ? idea.version : 1;
+  const nextVer = currentVer + 1;
+  const existingHistory = Array.isArray(idea.version_history) ? idea.version_history : [];
+  const nextHistory = [
+    ...existingHistory,
+    {
+      version_number: nextVer,
+      created_at: new Date().toISOString(),
+      changed_by: user.id,
+      change_summary: `Revision ${nextVer}: Refined idea parameters in ${data.category}`,
+    },
+  ];
 
-  if (error || !updated) {
-    throw new Error(error?.message || "Failed to update idea.");
+  let updated: any = null;
+
+  try {
+    const { data: resData, error: updateErr } = await supabase
+      .from("ideas")
+      .update({
+        title: data.title.trim(),
+        description,
+        problem,
+        solution,
+        category: data.category,
+        version: nextVer,
+        version_history: nextHistory,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("creator_id", user.id)
+      .select("*, creator:profiles!creator_id(*)")
+      .single();
+
+    if (!updateErr && resData) {
+      updated = resData;
+    } else {
+      // Fallback if version/version_history columns not yet applied
+      const { data: fallbackData } = await supabase
+        .from("ideas")
+        .update({
+          title: data.title.trim(),
+          description,
+          problem,
+          solution,
+          category: data.category,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .eq("creator_id", user.id)
+        .select("*, creator:profiles!creator_id(*)")
+        .single();
+      updated = fallbackData;
+    }
+  } catch {
+    const { data: fallbackData } = await supabase
+      .from("ideas")
+      .update({
+        title: data.title.trim(),
+        description,
+        problem,
+        solution,
+        category: data.category,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("creator_id", user.id)
+      .select("*, creator:profiles!creator_id(*)")
+      .single();
+    updated = fallbackData;
+  }
+
+  if (!updated) {
+    throw new Error("Failed to update idea.");
   }
 
   return mapIdea(updated);

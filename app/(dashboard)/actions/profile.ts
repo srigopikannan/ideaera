@@ -17,6 +17,19 @@ export async function updateProfileAction(formData: FormData) {
     ? rawSkills.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
 
+  const college = (formData.get("college") as string) || undefined;
+  const rawAge = formData.get("age") as string;
+  const age = rawAge ? parseInt(rawAge, 10) : undefined;
+  const show_age = formData.has("show_age") ? formData.get("show_age") === "true" : undefined;
+  const city = (formData.get("city") as string) || undefined;
+  const state = (formData.get("state") as string) || undefined;
+  const country = (formData.get("country") as string) || undefined;
+  const show_location = formData.has("show_location") ? formData.get("show_location") === "true" : undefined;
+  const rawInterests = formData.get("interests") as string;
+  const interests = rawInterests
+    ? rawInterests.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
+
   const updated = await updateProfile({
     full_name,
     headline,
@@ -26,6 +39,14 @@ export async function updateProfileAction(formData: FormData) {
     github_url,
     linkedin_url,
     skills,
+    college,
+    age,
+    show_age,
+    city,
+    state,
+    country,
+    show_location,
+    interests,
   });
 
   revalidatePath("/profile");

@@ -106,11 +106,11 @@ export default async function HackathonDetailPage({
             </div>
 
             <Link
-              href={`/people?hackathon=${encodeURIComponent(hackathon.title)}`}
+              href={`/people?hackathon=${encodeURIComponent(hackathon.title)}${hackathon.tags?.length ? `&skills=${encodeURIComponent(hackathon.tags.join(","))}` : ""}`}
               className="self-start sm:self-auto"
             >
               <Button size="lg" variant="default" className="shadow-subtle font-semibold gap-2">
-                <Users className="h-5 w-5" /> Form Team Members
+                <Users className="h-5 w-5" /> Find Teammates
               </Button>
             </Link>
           </div>
@@ -194,9 +194,9 @@ export default async function HackathonDetailPage({
                 Connect with designers, frontend & backend engineers, and AI specialists on IdeaEra to form a high-impact team.
               </p>
             </div>
-            <Link href={`/people?hackathon=${encodeURIComponent(hackathon.title)}`}>
+            <Link href={`/people?hackathon=${encodeURIComponent(hackathon.title)}${hackathon.tags?.length ? `&skills=${encodeURIComponent(hackathon.tags.join(","))}` : ""}`}>
               <Button size="lg" variant="default" className="font-semibold shadow-subtle gap-2 whitespace-nowrap">
-                <Users className="h-4 w-4" /> Form Team Members
+                <Users className="h-4 w-4" /> Build a Team
               </Button>
             </Link>
           </div>

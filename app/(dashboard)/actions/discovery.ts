@@ -16,8 +16,12 @@ export interface GlobalSearchResult {
     github_url?: string | null;
     linkedin_url?: string | null;
     location?: string | null;
+    college?: string | null;
+    skills?: string[];
+    city?: string | null;
+    state?: string | null;
   }[];
-  ideas: { id: string; title: string; category: string }[];
+  ideas: { id: string; title: string; category: string; display_id?: string }[];
   projects: { id: string; slug: string; name: string; description: string }[];
   hackathons: { id: string; title: string; mode: string }[];
   companies: { id: string; slug: string; name: string; industry: string }[];
@@ -51,7 +55,7 @@ export async function searchGlobalAction(query: string): Promise<GlobalSearchRes
   );
 
   return {
-    people: people.slice(0, 4).map((p) => ({
+    people: people.slice(0, 5).map((p) => ({
       id: p.id,
       name: p.full_name,
       username: p.username,
@@ -60,11 +64,16 @@ export async function searchGlobalAction(query: string): Promise<GlobalSearchRes
       github_url: p.github_url,
       linkedin_url: p.linkedin_url,
       location: p.location,
+      college: p.college,
+      skills: p.skills,
+      city: p.city,
+      state: p.state,
     })),
     ideas: ideas.slice(0, 4).map((i) => ({
       id: i.id,
       title: i.title,
       category: i.category,
+      display_id: i.display_id || `IDEA-${i.id.substring(0, 8).toUpperCase()}`,
     })),
     projects: projects.slice(0, 4).map((p) => ({
       id: p.id,

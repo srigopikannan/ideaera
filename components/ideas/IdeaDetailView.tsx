@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Idea, IdeaComment, Profile } from "@/types";
 import { toggleLikeAction, addCommentAction, deleteIdeaAction } from "@/app/(dashboard)/actions/ideas";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatFullDateTime } from "@/lib/utils";
 import {
   ArrowLeft,
   Heart,
@@ -20,6 +20,16 @@ import {
   Check,
   ArrowUpRight,
   Edit3,
+  ShieldCheck,
+  History,
+  Copy,
+  Calendar,
+  Lock,
+  Globe,
+  Tag,
+  GraduationCap,
+  MapPin,
+  Hash,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
@@ -33,12 +43,11 @@ interface IdeaDetailViewProps {
 }
 
 const DIMENSIONS = [
-  { id: "01", name: "THE IDEA", desc: "Core spark & initial thesis" },
+  { id: "01", name: "THE IDEA", desc: "Core spark & initial concept" },
   { id: "02", name: "THE PROBLEM", desc: "Contextual friction & bottleneck" },
   { id: "03", name: "THE POSSIBILITY", desc: "Architectural blueprint & stack" },
-  { id: "04", name: "PEOPLE", desc: "Creator & resonance network" },
-  { id: "05", name: "RELATED SPARKS", desc: "Adjacent domain nodes" },
-  { id: "06", name: "COLLABORATE", desc: "Peer critique & participation" },
+  { id: "04", name: "RECORD & OWNERSHIP", desc: "Platform record & version history" },
+  { id: "05", name: "COLLABORATE", desc: "Peer critique & participation" },
 ];
 
 export function IdeaDetailView({
@@ -54,7 +63,18 @@ export function IdeaDetailView({
   const [commentInput, setCommentInput] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [idCopied, setIdCopied] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+
+  const displayId = currentIdea.display_id || ("IDEA-" + currentIdea.id.substring(0, 8).toUpperCase());
+
+  const handleCopyId = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(displayId);
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 2000);
+    }
+  };
 
   // Section 2 & 3 distinct content resolution
   const problemContent = React.useMemo(() => {
@@ -277,13 +297,31 @@ export function IdeaDetailView({
 
         {/* Foreground Editorial Proposition */}
         <div className="relative z-10 space-y-6 max-w-2xl">
-          <div className="flex items-center gap-3">
-            <span className="px-3.5 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-mono uppercase tracking-[0.24em]">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-mono uppercase tracking-[0.24em]">
               IDEA // {currentIdea.category}
             </span>
-            <span className="text-xs font-mono text-neutral-500">
-              Published {formatDate(currentIdea.created_at)}
+            <button
+              onClick={handleCopyId}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-neutral-300 text-[11px] font-mono hover:border-white/25 hover:text-white transition-all cursor-pointer"
+              title="Click to copy permanent Idea ID"
+            >
+              <Hash className="h-3 w-3 text-indigo-400" />
+              <span>{displayId}</span>
+              {idCopied ? <Check className="h-3 w-3 text-emerald-400 ml-0.5" /> : <Copy className="h-3 w-3 text-neutral-500 ml-0.5" />}
+            </button>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase tracking-wider">
+              <Globe className="h-2.5 w-2.5" />
+              {currentIdea.visibility || "PUBLIC"}
             </span>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 text-[10px] font-mono">
+              v{currentIdea.version || 1}.0
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
+            <Calendar className="h-3.5 w-3.5 text-neutral-500" />
+            <span>Recorded {formatFullDateTime(currentIdea.created_at)}</span>
           </div>
 
           <h1 className="text-3xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.08] sm:leading-[1.05] break-words">
@@ -366,54 +404,146 @@ export function IdeaDetailView({
         </div>
       </section>
 
-      {/* DIMENSION 04: PEOPLE & RESONANCE */}
+      {/* DIMENSION 04: OWNERSHIP & PLATFORM RECORD */}
       <section className="relative py-24 px-6 sm:px-12 max-w-5xl mx-auto space-y-8 border-t border-white/[0.06]">
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400">
           <span className="text-cyan-400 font-bold">SECTION 04 //</span>
-          <span>INNOVATORS & RESONANCE</span>
+          <span>OWNERSHIP & PLATFORM RECORD</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl">
-          <div className="p-6 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-3">
+        {/* Platform Attestation Notice */}
+        <div className="p-6 rounded-2xl border border-cyan-500/20 bg-cyan-950/20 backdrop-blur-sm max-w-3xl flex items-start gap-4">
+          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0 mt-0.5">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-medium text-cyan-200 uppercase tracking-wider font-mono">
+              Platform Attestation
+            </h4>
+            <p className="text-xs sm:text-sm text-cyan-300/80 font-light leading-relaxed">
+              IdeaEra records this idea&apos;s creation and version history to help document its history on the platform.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
+          {/* Permanent Identifier & Platform Record Card */}
+          <div className="p-6 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-4">
             <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 block">
-              ORIGINATOR
+              PERMANENT IDENTIFIER & METRICS
             </span>
-            <Link
-              href={"/people/" + (currentIdea.author?.username || "creator")}
-              className="flex items-center gap-3 group/author hover:opacity-90 transition-opacity"
-            >
-              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-lg overflow-hidden">
-                {currentIdea.author?.avatar_url ? (
-                  <img
-                    src={currentIdea.author.avatar_url}
-                    alt={currentIdea.author.full_name || "Author"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  (currentIdea.author?.full_name || "I").charAt(0).toUpperCase()
-                )}
-              </div>
+            <div className="space-y-3">
               <div>
-                <h4 className="text-base font-light text-white group-hover/author:text-indigo-300 transition-colors">
-                  {currentIdea.author?.full_name || "Innovator"}
-                </h4>
-                <p className="text-xs font-mono text-neutral-400">
-                  @{currentIdea.author?.username || "creator"}
+                <span className="text-[11px] font-mono text-neutral-400 block mb-1">Permanent Idea ID</span>
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
+                  <span className="font-mono text-xs font-medium text-indigo-300 tracking-wider">
+                    {displayId}
+                  </span>
+                  <button
+                    onClick={handleCopyId}
+                    className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    title="Copy ID"
+                  >
+                    {idCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-mono text-neutral-400 block mb-1">Server Creation Timestamp</span>
+                <p className="text-xs font-mono text-neutral-200">
+                  {formatFullDateTime(currentIdea.created_at)}
                 </p>
               </div>
-            </Link>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/[0.06]">
+                <div>
+                  <span className="text-[10px] font-mono text-neutral-500 uppercase block">Current Version</span>
+                  <span className="text-sm font-mono text-white">v{currentIdea.version || 1}.0</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono text-neutral-500 uppercase block">Visibility</span>
+                  <span className="text-sm font-mono text-emerald-400 uppercase">{currentIdea.visibility || "PUBLIC"}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="p-6 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-3">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 block">
-              COMMUNITY GRAVITY
-            </span>
-            <div className="space-y-1">
-              <span className="text-3xl font-mono font-light text-white">{likesCount}</span>
-              <p className="text-xs text-neutral-400 font-light">Innovators endorsed this proposition</p>
+          {/* Originator Card */}
+          <div className="p-6 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500">
+                  ORIGINATOR
+                </span>
+                <span className="text-[10px] font-mono text-indigo-400">AUTHOR</span>
+              </div>
+
+              <Link
+                href={"/people/" + (currentIdea.author?.username || "creator")}
+                className="flex items-center gap-3.5 group/author hover:opacity-90 transition-opacity"
+              >
+                <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-lg overflow-hidden shrink-0">
+                  {currentIdea.author?.avatar_url ? (
+                    <img
+                      src={currentIdea.author.avatar_url}
+                      alt={currentIdea.author.full_name || "Author"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    (currentIdea.author?.full_name || "I").charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-base font-medium text-white group-hover/author:text-indigo-300 transition-colors truncate">
+                    {currentIdea.author?.full_name || "Innovator"}
+                  </h4>
+                  <p className="text-xs font-mono text-neutral-400 truncate">
+                    @{currentIdea.author?.username || "creator"}
+                  </p>
+                  {currentIdea.author?.headline && (
+                    <p className="text-[11px] text-neutral-500 truncate mt-0.5">
+                      {currentIdea.author.headline}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            </div>
+
+            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
+              <span className="text-[11px] font-mono text-neutral-400">Community Gravity</span>
+              <span className="text-xs font-mono text-white font-medium">{likesCount} Endorsements</span>
             </div>
           </div>
         </div>
+
+        {/* Version History Log */}
+        {currentIdea.version_history && currentIdea.version_history.length > 0 && (
+          <div className="max-w-3xl space-y-3">
+            <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
+              <History className="h-3.5 w-3.5 text-purple-400" />
+              <span className="uppercase tracking-wider">Version History ({currentIdea.version_history.length})</span>
+            </div>
+            <div className="space-y-2">
+              {currentIdea.version_history.map((ver, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl border border-white/[0.06] bg-[#0a0c13] flex items-center justify-between gap-4 text-xs font-mono"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="px-2 py-0.5 rounded bg-white/5 text-purple-300 text-[10px]">
+                      v{ver.version}.0
+                    </span>
+                    <span className="text-neutral-300">{ver.changes_summary || "Idea updated"}</span>
+                  </div>
+                  <span className="text-neutral-500 text-[11px] shrink-0">
+                    {formatDate(ver.created_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* DIMENSION 05: COLLABORATE & CRITIQUE */}
@@ -454,7 +584,7 @@ export function IdeaDetailView({
         <div className="space-y-3 max-w-3xl pt-2">
           {comments.length === 0 ? (
             <div className="p-8 rounded-2xl border border-white/[0.06] bg-[#0a0c13] text-center text-xs font-mono text-neutral-500">
-              No critique notes recorded yet. Be the first to analyze this thesis.
+              No critique notes recorded yet. Be the first to analyze this idea.
             </div>
           ) : (
             comments.map((c) => (

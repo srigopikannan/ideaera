@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CORE_VERIFIED_HACKATHONS } from "@/scripts/seed-hackathons.mjs";
 
-function toValidISO(val: any, fallbackDays = 0) {
-  if (!val) return new Date(Date.now() + fallbackDays * 86400000).toISOString();
+function parseISOOrNull(val: any): string | null {
+  if (!val) return null;
   try {
     const d = new Date(val);
     if (!isNaN(d.getTime())) return d.toISOString();
   } catch {}
-  return new Date(Date.now() + fallbackDays * 86400000).toISOString();
+  return null;
 }
 
 const TN_KEYWORDS = [
@@ -105,8 +105,13 @@ async function fetchLiveUnstopHackathons() {
         .slice(0, 300)
         .trim();
 
-      const startDate = toValidISO(item.approved_date || item.start_date, 0);
-      const endDate = toValidISO(item.end_date, 14);
+      // Registration deadline is end_date or regnRequirements.end_regn_dt
+      const regDeadline = parseISOOrNull(item.end_date || item.regnRequirements?.end_regn_dt);
+      
+      // External API does not provide event dates in search result. DO NOT invent dates.
+      const startDate = parseISOOrNull(item.event_start_date || item.start_date);
+      const endDate = parseISOOrNull(item.event_end_date || item.end_date_event);
+      const isDateTBD = !startDate;
       const image = item.banner_url || item.logo_url?.url || TECH_IMAGES[idx % TECH_IMAGES.length];
 
       return {
@@ -116,7 +121,8 @@ async function fetchLiveUnstopHackathons() {
         location: region === "Tamil Nadu" ? `${org}, Tamil Nadu` : `${org} (Pan-India / Hybrid)`,
         start_date: startDate,
         end_date: endDate,
-        registration_deadline: endDate,
+        registration_deadline: regDeadline,
+        is_date_tbd: isDateTBD,
         prize_pool: prizes,
         link: workingLink,
         image,
@@ -126,8 +132,11 @@ async function fetchLiveUnstopHackathons() {
       };
     })
     .filter((h) => {
-      const end = new Date(h.end_date).getTime();
-      return isNaN(end) || end >= now;
+      const deadline = h.registration_deadline ? new Date(h.registration_deadline).getTime() : NaN;
+      const end = h.end_date ? new Date(h.end_date).getTime() : NaN;
+      if (!isNaN(deadline) && deadline < now) return false;
+      if (!isNaN(end) && end < now) return false;
+      return true;
     });
 }
 
@@ -151,44 +160,68 @@ export async function POST() {
 
     let syncedCount = 0;
     for (const hack of allHackathons) {
-      const packedDescription = `[Host: ${hack.host}] [Region: ${hack.region}] [Link: ${hack.link}] [Image: ${hack.image}] ${hack.description}`;
+      const tbdTag = (hack as any).is_date_tbd || !hack.start_date ? " [DateTBD: true]" : "";
+      const packedDescription = `[Host: ${hack.host}] [Region: ${hack.region}] [Link: ${hack.link}] [Image: ${hack.image}]${tbdTag} ${hack.description}`;
 
+      // Exact title match to prevent incorrect duplicate mappings
       const { data: existing } = await supabase
         .from("hackathons")
         .select("id")
-        .ilike("title", `%${hack.title.slice(0, 24)}%`)
+        .eq("title", hack.title)
         .maybeSingle();
 
+      const payload = {
+        title: hack.title,
+        description: packedDescription,
+        location: hack.location,
+        prize_pool: hack.prize_pool,
+        start_date: hack.start_date,
+        end_date: hack.end_date,
+        registration_deadline: hack.registration_deadline || hack.start_date,
+        min_team_size: hack.min_team_size,
+        max_team_size: hack.max_team_size,
+      };
+
       if (existing) {
-        await supabase
+        const { error: uErr } = await supabase
           .from("hackathons")
-          .update({
-            title: hack.title,
-            description: packedDescription,
-            location: hack.location,
-            prize_pool: hack.prize_pool,
-            start_date: hack.start_date,
-            end_date: hack.end_date,
-            registration_deadline: hack.registration_deadline,
-            min_team_size: hack.min_team_size,
-            max_team_size: hack.max_team_size,
-          })
+          .update(payload)
           .eq("id", existing.id);
-        syncedCount++;
+
+        if (uErr && uErr.code === "23502" && !hack.start_date) {
+          // Graceful fallback for not-null constraint before schema migration is applied
+          await supabase
+            .from("hackathons")
+            .update({
+              ...payload,
+              start_date: "1970-01-01T00:00:00Z",
+              end_date: "1970-01-01T00:00:00Z",
+              registration_deadline: payload.registration_deadline || "1970-01-01T00:00:00Z",
+            })
+            .eq("id", existing.id);
+          syncedCount++;
+        } else if (!uErr) {
+          syncedCount++;
+        }
       } else {
-        const { error } = await supabase.from("hackathons").insert({
-          title: hack.title,
-          description: packedDescription,
+        const { error: iErr } = await supabase.from("hackathons").insert({
+          ...payload,
           organizer_id: organizerId,
-          location: hack.location,
-          start_date: hack.start_date,
-          end_date: hack.end_date,
-          registration_deadline: hack.registration_deadline,
-          prize_pool: hack.prize_pool,
-          min_team_size: hack.min_team_size,
-          max_team_size: hack.max_team_size,
         });
-        if (!error) syncedCount++;
+
+        if (iErr && iErr.code === "23502" && !hack.start_date) {
+          // Graceful fallback for not-null constraint before schema migration is applied
+          await supabase.from("hackathons").insert({
+            ...payload,
+            organizer_id: organizerId,
+            start_date: "1970-01-01T00:00:00Z",
+            end_date: "1970-01-01T00:00:00Z",
+            registration_deadline: payload.registration_deadline || "1970-01-01T00:00:00Z",
+          });
+          syncedCount++;
+        } else if (!iErr) {
+          syncedCount++;
+        }
       }
     }
 

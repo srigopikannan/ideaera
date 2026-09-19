@@ -5,9 +5,62 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(dateString: string): string {
-  if (!dateString) return "";
-  const date = new Date(dateString);
+const MONTH_ABBRS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function getDateParts(date: Date, timeZone: string = "Asia/Kolkata") {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone,
+    });
+    const parts = formatter.formatToParts(date);
+    let year = 0;
+    let monthStr = "";
+    let monthIndex = 0;
+    let day = 0;
+    for (const part of parts) {
+      if (part.type === "year") year = parseInt(part.value, 10);
+      if (part.type === "month") {
+        monthStr = part.value;
+        monthIndex = MONTH_ABBRS.indexOf(monthStr);
+      }
+      if (part.type === "day") day = parseInt(part.value, 10);
+    }
+    return { year, month: monthIndex, monthStr, day };
+  } catch {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      monthStr: MONTH_ABBRS[date.getMonth()] || "",
+      day: date.getDate(),
+    };
+  }
+}
+
+export function isEpochOrInvalid(dateString: string | null | undefined): boolean {
+  if (!dateString) return true;
+  const str = String(dateString).trim();
+  if (str === "" || str.startsWith("1970-01-01")) return true;
+  const d = new Date(str);
+  return isNaN(d.getTime()) || d.getFullYear() <= 1970;
+}
+
+export function formatDate(dateString: string | null | undefined): string {
+  if (!dateString || isEpochOrInvalid(dateString)) return "";
+  const str = String(dateString).trim();
+
+  // Handle YYYY-MM-DD calendar dates strictly to prevent timezone shifts
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const year = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    const day = parseInt(m[3], 10);
+    return `${MONTH_ABBRS[month] || ""} ${day}, ${year}`;
+  }
+
+  const date = new Date(str);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -15,8 +68,8 @@ export function formatDate(dateString: string): string {
   }).format(date);
 }
 
-export function formatDateTime(dateString: string): string {
-  if (!dateString) return "";
+export function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString || isEpochOrInvalid(dateString)) return "";
   const date = new Date(dateString);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -28,8 +81,91 @@ export function formatDateTime(dateString: string): string {
   }).format(date);
 }
 
+export function formatDateTimeWithTz(
+  dateString?: string | null,
+  timeZone: string = "Asia/Kolkata",
+  tzLabel: string = "IST"
+): string {
+  if (!dateString || isEpochOrInvalid(dateString)) return "Date to be announced";
+  const date = new Date(dateString);
+
+  try {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone,
+    }).format(date);
+
+    return `${formatted} ${tzLabel}`;
+  } catch {
+    return formatDateTime(dateString);
+  }
+}
+
+export function formatEventDateRange(
+  startStr?: string | null,
+  endStr?: string | null,
+  options: { timeZone?: string } = { timeZone: "Asia/Kolkata" }
+): string {
+  if (isEpochOrInvalid(startStr)) {
+    return "Date TBD";
+  }
+
+  const start = new Date(startStr!);
+  if (isEpochOrInvalid(endStr)) {
+    return formatDate(startStr);
+  }
+
+  const end = new Date(endStr!);
+  const tz = options.timeZone || "Asia/Kolkata";
+  const p1 = getDateParts(start, tz);
+  const p2 = getDateParts(end, tz);
+
+  // Same calendar day
+  if (p1.year === p2.year && p1.month === p2.month && p1.day === p2.day) {
+    return `${p1.monthStr} ${p1.day}, ${p1.year}`;
+  }
+
+  // Same month and year: "Oct 25 – 27, 2026"
+  if (p1.year === p2.year && p1.month === p2.month) {
+    return `${p1.monthStr} ${p1.day} – ${p2.day}, ${p1.year}`;
+  }
+
+  // Same year, different months: "Oct 28 – Nov 2, 2026"
+  if (p1.year === p2.year) {
+    return `${p1.monthStr} ${p1.day} – ${p2.monthStr} ${p2.day}, ${p1.year}`;
+  }
+
+  // Different years: "Dec 30, 2026 – Jan 3, 2027"
+  return `${p1.monthStr} ${p1.day}, ${p1.year} – ${p2.monthStr} ${p2.day}, ${p2.year}`;
+}
+
+export function formatRegistrationDeadline(
+  deadlineStr?: string | null
+): { text: string; isClosed: boolean } {
+  if (isEpochOrInvalid(deadlineStr)) {
+    return { text: "Open registration", isClosed: false };
+  }
+
+  const deadline = new Date(deadlineStr!);
+  const now = Date.now();
+
+  if (deadline.getTime() < now) {
+    return { text: "Registration closed", isClosed: true };
+  }
+
+  return {
+    text: `Register by ${formatDate(deadlineStr)}`,
+    isClosed: false,
+  };
+}
+
 export function formatFullDateTime(dateString: string): string {
-  if (!dateString) return "";
+  if (!dateString || isEpochOrInvalid(dateString)) return "";
   const date = new Date(dateString);
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",

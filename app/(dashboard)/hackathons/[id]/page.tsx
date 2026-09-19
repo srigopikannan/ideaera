@@ -3,10 +3,11 @@ import Link from "next/link";
 import { getHackathonById } from "@/services/hackathons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTimeWithTz, formatEventDateRange, formatRegistrationDeadline } from "@/lib/utils";
 import {
   ArrowLeft,
   Calendar,
+  Clock,
   MapPin,
   Trophy,
   Users,
@@ -35,6 +36,9 @@ export default async function HackathonDetailPage({
   }
 
   const isOngoing = hackathon.status === "ongoing";
+  const isEnded = hackathon.status === "ended";
+  const eventDateRange = formatEventDateRange(hackathon.start_date, hackathon.end_date);
+  const regDeadline = formatRegistrationDeadline(hackathon.registration_deadline);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 pb-16 px-4 sm:px-0">
@@ -56,6 +60,10 @@ export default async function HackathonDetailPage({
           {isOngoing ? (
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500 text-white shadow-sm">
               🟢 Live Now
+            </span>
+          ) : isEnded ? (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-neutral-600 text-white shadow-sm">
+              ⚪ Concluded
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-sky-600 text-white shadow-sm">
@@ -81,6 +89,10 @@ export default async function HackathonDetailPage({
             {isOngoing ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500 text-white shadow-md">
                 🟢 Live Now
+              </span>
+            ) : isEnded ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-neutral-700 text-white shadow-md">
+                ⚪ Concluded
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-600 text-white shadow-md">
@@ -117,18 +129,45 @@ export default async function HackathonDetailPage({
 
           {/* Quick Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Schedule / Date & Time */}
+            {/* Event Schedule */}
             <div className="p-4 rounded-2xl bg-surface-elevated border border-border space-y-2">
               <span className="text-[11px] text-muted-foreground uppercase font-semibold flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-primary" /> Date & Time
+                <Calendar className="h-4 w-4 text-primary" /> Event Dates
               </span>
               <div className="space-y-1">
                 <p className="text-xs font-bold text-foreground">
-                  {formatDateTime(hackathon.start_date)}
+                  {eventDateRange}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Until {formatDateTime(hackathon.end_date)}
+                {hackathon.start_date ? (
+                  <p className="text-[10px] text-muted-foreground">
+                    From {formatDateTimeWithTz(hackathon.start_date, "Asia/Kolkata", "IST")}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-neutral-400">
+                    Schedule to be announced
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Registration Deadline */}
+            <div className="p-4 rounded-2xl bg-surface-elevated border border-border space-y-2">
+              <span className="text-[11px] text-muted-foreground uppercase font-semibold flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-amber-500" /> Registration Closes
+              </span>
+              <div className="space-y-1">
+                <p className={`text-xs font-bold ${regDeadline.isClosed ? "text-red-400" : "text-amber-400"}`}>
+                  {regDeadline.text}
                 </p>
+                {hackathon.registration_deadline ? (
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatDateTimeWithTz(hackathon.registration_deadline, "Asia/Kolkata", "IST")}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-neutral-400">
+                    Open online registration
+                  </p>
+                )}
               </div>
             </div>
 
@@ -141,7 +180,7 @@ export default async function HackathonDetailPage({
                 <p className="text-xs font-bold text-foreground line-clamp-1">
                   {hackathon.location}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground">
                   Mode: {hackathon.mode}
                 </p>
               </div>

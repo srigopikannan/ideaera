@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Hackathon } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatEventDateRange, formatRegistrationDeadline } from "@/lib/utils";
 import { Calendar, MapPin, Trophy, Users } from "lucide-react";
 import { Card3D } from "@/components/3d/Card3D";
 
@@ -13,6 +13,11 @@ interface HackathonCardProps {
 }
 
 export function HackathonCard({ hackathon }: HackathonCardProps) {
+  const isLive = hackathon.status === "ongoing";
+  const isEnded = hackathon.status === "ended";
+  const eventDateRange = formatEventDateRange(hackathon.start_date, hackathon.end_date);
+  const regDeadline = formatRegistrationDeadline(hackathon.registration_deadline);
+
   const getModeBadge = (mode: Hackathon["mode"]) => {
     switch (mode) {
       case "Online":
@@ -78,10 +83,14 @@ export function HackathonCard({ hackathon }: HackathonCardProps) {
 
           <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
             {getRegionBadge(hackathon.region)}
-            {hackathon.status === "ongoing" ? (
+            {isLive ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-white shadow-md">
                 <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                 Live Now
+              </span>
+            ) : isEnded ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-600 text-white shadow-md">
+                Concluded
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-600/95 text-white shadow-md">
@@ -123,11 +132,13 @@ export function HackathonCard({ hackathon }: HackathonCardProps) {
               <Calendar className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
               <div className="min-w-0">
                 <span className="font-semibold text-foreground text-[11px] block">
-                  {formatDateTime(hackathon.start_date)}
+                  {eventDateRange}
                 </span>
-                <span className="text-[10px] text-muted-foreground block">
-                  To {formatDateTime(hackathon.end_date)}
-                </span>
+                {hackathon.registration_deadline && (
+                  <span className={`text-[10px] block ${regDeadline.isClosed ? "text-red-400 font-medium" : "text-amber-400/90 font-medium"}`}>
+                    {regDeadline.text}
+                  </span>
+                )}
               </div>
             </div>
 

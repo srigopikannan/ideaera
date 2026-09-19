@@ -118,9 +118,9 @@ export interface Hackathon {
   location: string;
   mode?: 'Online' | 'In-Person' | 'Hybrid';
   region?: 'Tamil Nadu' | 'India' | 'Asia' | 'Global' | string;
-  start_date: string;
-  end_date: string;
-  registration_deadline?: string;
+  start_date: string | null;
+  end_date: string | null;
+  registration_deadline?: string | null;
   registration_url?: string;
   image_url?: string | null;
   created_at: string;
@@ -129,7 +129,8 @@ export interface Hackathon {
   prizes?: string;
   min_team_size?: number;
   max_team_size?: number;
-  status?: 'ongoing' | 'upcoming';
+  status?: 'ongoing' | 'upcoming' | 'ended';
+  is_date_tbd?: boolean;
 }
 
 export interface Company {

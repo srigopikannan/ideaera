@@ -16,17 +16,21 @@ import {
   Plus,
   Radio,
 } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatEventDateRange, formatRegistrationDeadline } from "@/lib/utils";
 
 interface HackathonsExplorerProps {
   initialHackathons: Hackathon[];
 }
 
 export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProps) {
-  const [hackathons] = React.useState<Hackathon[]>(initialHackathons);
+  const [hackathons, setHackathons] = React.useState<Hackathon[]>(initialHackathons);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedRegion, setSelectedRegion] = React.useState<"all" | "Tamil Nadu" | "India" | "Asia" | "Global">("all");
-  const [selectedFilter, setSelectedFilter] = React.useState<"all" | "live" | "upcoming" | "online" | "in-person">("all");
+  const [selectedFilter, setSelectedFilter] = React.useState<"all" | "live" | "upcoming" | "past" | "online" | "in-person">("all");
+
+  React.useEffect(() => {
+    setHackathons(initialHackathons);
+  }, [initialHackathons]);
 
   const regionCounts = React.useMemo(() => {
     const counts: Record<string, number> = {
@@ -63,6 +67,8 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
         matchesFilter = h.status === "ongoing";
       } else if (selectedFilter === "upcoming") {
         matchesFilter = h.status === "upcoming";
+      } else if (selectedFilter === "past") {
+        matchesFilter = h.status === "ended";
       } else if (selectedFilter === "online") {
         matchesFilter = h.mode === "Online" || h.mode === "Hybrid";
       } else if (selectedFilter === "in-person") {
@@ -133,6 +139,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
             { label: "ALL STATUS", value: "all" },
             { label: "LIVE NOW", value: "live" },
             { label: "UPCOMING", value: "upcoming" },
+            { label: "CONCLUDED", value: "past" },
             { label: "ONLINE", value: "online" },
           ].map((f) => (
             <button
@@ -165,6 +172,9 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredHackathons.map((hack) => {
             const isLive = hack.status === "ongoing";
+            const isEnded = hack.status === "ended";
+            const eventDatesStr = formatEventDateRange(hack.start_date, hack.end_date);
+            const regDeadline = formatRegistrationDeadline(hack.registration_deadline);
 
             return (
               <Link
@@ -178,14 +188,16 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
                     <div className="flex items-center gap-2">
                       <span
                         className={cn(
-                          "h-2 w-2 rounded-full animate-pulse",
+                          "h-2 w-2 rounded-full",
                           isLive
-                            ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
-                            : "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]"
+                            ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse"
+                            : isEnded
+                            ? "bg-neutral-500"
+                            : "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.9)]"
                         )}
                       />
                       <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
-                        {isLive ? "LIVE IN PROGRESS" : "UPCOMING SPRINT"}
+                        {isLive ? "LIVE IN PROGRESS" : isEnded ? "CONCLUDED" : "UPCOMING SPRINT"}
                       </span>
                     </div>
 
@@ -237,14 +249,33 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
                 </div>
 
                 {/* Footer Horizon Metrics */}
-                <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between text-[10px] font-mono text-neutral-500">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3" />
-                    <span>{formatDate(hack.start_date)}</span>
+                <div className="pt-4 border-t border-white/[0.08] flex flex-col gap-2.5 text-[10px] font-mono">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-neutral-300">
+                      <Calendar className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span className="font-medium text-[11px]">{eventDatesStr}</span>
+                    </div>
+
+                    {hack.registration_deadline && (
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded-full border text-[9px] uppercase tracking-wider shrink-0",
+                          regDeadline.isClosed
+                            ? "border-red-500/20 text-red-400/90 bg-red-500/10"
+                            : "border-amber-500/25 text-amber-300 bg-amber-500/10"
+                        )}
+                      >
+                        {regDeadline.text}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 text-white group-hover:text-amber-300 transition-colors">
-                    <span>Inspect Sprint</span>
-                    <ArrowUpRight className="h-3.5 w-3.5" />
+
+                  <div className="flex items-center justify-between text-neutral-500 pt-0.5">
+                    <span className="line-clamp-1 max-w-[200px]">{hack.location}</span>
+                    <div className="flex items-center gap-1 text-white group-hover:text-amber-300 transition-colors shrink-0">
+                      <span>Inspect Sprint</span>
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </div>
                   </div>
                 </div>
               </Link>

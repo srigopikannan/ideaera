@@ -76,13 +76,13 @@ export function AppHeader() {
           </Link>
         </div>
 
-        {/* Global Search Bar (Desktop Trigger) */}
-        <div className="flex-1 max-w-md hidden sm:block">
+        {/* Global Search Bar (Desktop Trigger - Centered) */}
+        <div className="flex-1 hidden md:flex justify-center max-w-xl mx-auto px-4">
           <button
             onClick={() => {
               window.dispatchEvent(new CustomEvent("open-global-search"));
             }}
-            className="w-full flex items-center justify-between px-3.5 py-2 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 text-neutral-400 text-xs transition-all shadow-sm group"
+            className="w-full max-w-md flex items-center justify-between px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 text-neutral-400 text-xs transition-all shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
               <Search className="h-3.5 w-3.5 text-neutral-500 group-hover:text-neutral-300" />

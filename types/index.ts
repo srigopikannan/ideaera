@@ -171,4 +171,6 @@ export interface MatchRecommendation {
   matchReason: string;
   sharedSkills: string[];
   sharedInterests: string[];
+  complementarySkills?: string[];
+  projects?: { id: string; name: string; slug?: string }[];
 }

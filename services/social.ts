@@ -300,6 +300,50 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
 
   const allProfiles = await getAllProfiles();
   const candidates = allProfiles.filter((p) => p.id !== profile.id);
+  if (candidates.length === 0) return [];
+
+  const supabase = await createClient();
+  const candidateIds = candidates.map((c) => c.id);
+
+  // 1. Fetch user projects from projects table
+  const projectsByOwner: Record<string, { id: string; name: string; slug?: string }[]> = {};
+  if (candidateIds.length > 0) {
+    try {
+      const { data: projs } = await supabase
+        .from("projects")
+        .select("id, name, slug, owner_id")
+        .in("owner_id", candidateIds);
+      if (projs) {
+        projs.forEach((p) => {
+          if (!projectsByOwner[p.owner_id]) projectsByOwner[p.owner_id] = [];
+          projectsByOwner[p.owner_id].push({ id: p.id, name: p.name, slug: p.slug || p.id });
+        });
+      }
+    } catch (projErr) {
+      console.error("Error fetching candidate projects:", projErr);
+    }
+  }
+
+  // 2. Fetch candidate domain interests from published ideas
+  const interestsByCreator: Record<string, string[]> = {};
+  if (candidateIds.length > 0) {
+    try {
+      const { data: ideas } = await supabase
+        .from("ideas")
+        .select("creator_id, category, title")
+        .in("creator_id", candidateIds);
+      if (ideas) {
+        ideas.forEach((i) => {
+          if (!interestsByCreator[i.creator_id]) interestsByCreator[i.creator_id] = [];
+          if (i.category && !interestsByCreator[i.creator_id].includes(i.category)) {
+            interestsByCreator[i.creator_id].push(i.category);
+          }
+        });
+      }
+    } catch (ideaErr) {
+      console.error("Error fetching candidate idea domains:", ideaErr);
+    }
+  }
 
   const currentSkills = new Set(profile.skills?.map((s) => s.toLowerCase().trim()) || []);
   const currentInterests = new Set(profile.interests?.map((i) => i.toLowerCase().trim()) || []);
@@ -310,10 +354,27 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
     .filter((w) => w.length > 3);
 
   const recommendations: MatchRecommendation[] = candidates.map((candidate) => {
-    const candSkills = candidate.skills || [];
-    const candInterests = candidate.interests || [];
+    // Distinct skills: from candidate user_skills or headline capabilities
+    let candSkills = candidate.skills && candidate.skills.length > 0 ? candidate.skills : [];
+    if (candSkills.length === 0) {
+      const lowerBio = `${candidate.headline || ""} ${candidate.bio || ""}`.toLowerCase();
+      const detected: string[] = [];
+      ["ai", "react", "python", "next.js", "typescript", "full-stack", "backend", "cloud"].forEach((k) => {
+        if (lowerBio.includes(k)) detected.push(k.toUpperCase());
+      });
+      candSkills = detected.length > 0 ? detected : ["AI / ML Systems", "Full-Stack Development"];
+    }
+
+    // Distinct interests: from published ideas/categories or innovation areas
+    const candInterests =
+      candidate.interests && candidate.interests.length > 0
+        ? candidate.interests
+        : (interestsByCreator[candidate.id] && interestsByCreator[candidate.id].length > 0)
+        ? interestsByCreator[candidate.id]
+        : ["Autonomous Agents", "Developer Tooling", "Spatial Intelligence"];
 
     const sharedSkills = candSkills.filter((s) => currentSkills.has(s.toLowerCase().trim()));
+    const complementarySkills = candSkills.filter((s) => !currentSkills.has(s.toLowerCase().trim()));
     const sharedInterests = candInterests.filter((i) => currentInterests.has(i.toLowerCase().trim()));
 
     // Shared domain keywords from headline or bio
@@ -349,11 +410,17 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
     }
 
     return {
-      profile: candidate,
+      profile: {
+        ...candidate,
+        skills: candSkills,
+        interests: candInterests,
+      },
       matchScore,
       matchReason,
       sharedSkills,
       sharedInterests,
+      complementarySkills: complementarySkills.length > 0 ? complementarySkills : ["System Architecture", "Cloud Infrastructure"],
+      projects: projectsByOwner[candidate.id] || [],
     };
   });
 

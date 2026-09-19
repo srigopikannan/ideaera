@@ -37,9 +37,9 @@ export default async function HackathonDetailPage({
   const isOngoing = hackathon.status === "ongoing";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-16">
+    <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 pb-16 px-4 sm:px-0">
       {/* Top Breadcrumb */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/hackathons"
           className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
@@ -47,7 +47,7 @@ export default async function HackathonDetailPage({
           <ArrowLeft className="h-4 w-4" />
           Back to Hackathons
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {hackathon.region && (
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
               {hackathon.region === "Tamil Nadu" ? "⭐ " : ""}{hackathon.region}
@@ -93,14 +93,14 @@ export default async function HackathonDetailPage({
           </div>
         </div>
 
-        <div className="p-6 sm:p-10 space-y-8">
+        <div className="p-5 sm:p-10 space-y-6 sm:space-y-8">
           {/* Header & Squad Assembly CTA */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-border pb-6">
             <div className="space-y-2 max-w-xl">
               <span className="text-xs font-semibold text-primary block">
                 Organized by {hackathon.organizer}
               </span>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground break-words">
                 {hackathon.title}
               </h1>
             </div>

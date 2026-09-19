@@ -79,7 +79,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
   }, [hackathons, searchQuery, selectedFilter, selectedRegion]);
 
   return (
-    <div className="relative w-full min-h-[calc(100vh-4rem)] p-6 sm:p-12 space-y-10 select-none overflow-x-hidden">
+    <div className="relative w-full min-h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-12 space-y-6 sm:space-y-10 select-none overflow-x-hidden">
       {/* Top Ambient HUD */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
         <div className="space-y-1">
@@ -99,7 +99,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
           <SyncHackathonsButton />
           <Link
             href="/hackathons/submit"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
+            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
           >
             <Plus className="h-4 w-4" />
             <span>Submit Sprint</span>
@@ -110,13 +110,13 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
       {/* Floating Filter Radar Capsule */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Region Selector Pills */}
-        <div className="inline-flex items-center p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl flex-wrap gap-1">
+        <div className="inline-flex items-center max-w-full overflow-x-auto no-scrollbar p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shrink-0 gap-1">
           {(["all", "Tamil Nadu", "India", "Asia", "Global"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setSelectedRegion(r)}
               className={cn(
-                "px-3.5 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+                "px-3 sm:px-3.5 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
                 selectedRegion === r
                   ? "bg-white text-black font-semibold shadow-lg"
                   : "text-neutral-400 hover:text-white"
@@ -128,7 +128,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
         </div>
 
         {/* Status Mode Selector */}
-        <div className="inline-flex items-center p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl">
+        <div className="inline-flex items-center max-w-full overflow-x-auto no-scrollbar p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shrink-0">
           {[
             { label: "ALL STATUS", value: "all" },
             { label: "LIVE NOW", value: "live" },
@@ -139,7 +139,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
               key={f.value}
               onClick={() => setSelectedFilter(f.value as any)}
               className={cn(
-                "px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+                "px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
                 selectedFilter === f.value
                   ? "bg-white text-black font-semibold shadow-lg"
                   : "text-neutral-400 hover:text-white"
@@ -170,7 +170,7 @@ export function HackathonsExplorer({ initialHackathons }: HackathonsExplorerProp
               <Link
                 key={hack.id}
                 href={`/hackathons/${hack.id}`}
-                className="group relative rounded-3xl border border-white/10 bg-[#0a0c13]/75 backdrop-blur-xl p-6 sm:p-8 space-y-6 hover:border-amber-500/40 hover:bg-[#0e111a] transition-all duration-300 shadow-xl flex flex-col justify-between block"
+                className="group relative rounded-3xl border border-white/10 bg-[#0a0c13]/75 backdrop-blur-xl p-5 sm:p-8 space-y-5 sm:space-y-6 hover:border-amber-500/40 hover:bg-[#0e111a] transition-all duration-300 shadow-xl flex flex-col justify-between block"
               >
                 <div className="space-y-4">
                   {/* Status Indicator & Mode */}

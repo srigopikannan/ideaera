@@ -7,12 +7,12 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex bg-[#07080c] text-[#f8f9fa] selection:bg-indigo-500/30 selection:text-white">
+    <div className="min-h-screen w-full max-w-full flex bg-[#07080c] text-[#f8f9fa] selection:bg-indigo-500/30 selection:text-white overflow-x-hidden">
       {/* Desktop Sidebar */}
       <AppSidebar />
 
       {/* Main Workspace Area: Expansive Full Canvas */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden">
         <AppHeader />
         <main className="flex-1 w-full min-h-[calc(100vh-4rem)] relative overflow-x-hidden">
           {children}

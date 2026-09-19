@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 px-4 sm:px-0">
       <div>
         <div className="flex items-center gap-2 text-primary text-xs font-semibold uppercase tracking-wider mb-1">
           <Settings className="h-4 w-4" />

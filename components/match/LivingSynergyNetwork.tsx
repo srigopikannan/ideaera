@@ -72,9 +72,12 @@ export function LivingSynergyNetwork({
 
       const cx = width / 2;
       const cy = height / 2;
+      const baseScale = Math.min(1, (Math.min(width, height) * 0.44) / 320);
+      const scale = Math.max(0.4, baseScale);
 
       // Draw harmonic orbital resonance rings
-      [90, 160, 240, 320].forEach((r, ringIdx) => {
+      [90, 160, 240, 320].forEach((baseR, ringIdx) => {
+        const r = baseR * scale;
         ctx.save();
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -86,20 +89,22 @@ export function LivingSynergyNetwork({
       });
 
       // Central Harmonic Sun
-      const sunGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80);
+      const sunR = Math.max(35, 80 * scale);
+      const sunGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sunR);
       sunGrad.addColorStop(0, "rgba(99, 102, 241, 0.3)");
       sunGrad.addColorStop(0.5, "rgba(56, 189, 248, 0.1)");
       sunGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.fillStyle = sunGrad;
       ctx.beginPath();
-      ctx.arc(cx, cy, 80, 0, Math.PI * 2);
+      ctx.arc(cx, cy, sunR, 0, Math.PI * 2);
       ctx.fill();
 
       // Render Nodes & Filaments
       nodePositions.forEach((node) => {
         const currentAngle = node.angle + t * node.speed;
-        const nx = cx + Math.cos(currentAngle) * node.baseDist;
-        const ny = cy + Math.sin(currentAngle) * (node.baseDist * 0.75);
+        const dist = node.baseDist * scale;
+        const nx = cx + Math.cos(currentAngle) * dist;
+        const ny = cy + Math.sin(currentAngle) * (dist * 0.75);
 
         const isHovered = activeRec?.profile.id === node.rec.profile.id;
         const isConnected =
@@ -182,16 +187,49 @@ export function LivingSynergyNetwork({
     const my = e.clientY - rect.top;
     const cx = rect.width / 2;
     const cy = rect.height / 2;
+    const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.44) / 320);
+    const scale = Math.max(0.4, baseScale);
 
     let closest: MatchRecommendation | null = null;
     let minDist = 34;
 
     for (const node of nodePositions) {
-      const nx = cx + Math.cos(node.angle) * node.baseDist;
-      const ny = cy + Math.sin(node.angle) * (node.baseDist * 0.75);
-      const dist = Math.hypot(mx - nx, my - ny);
-      if (dist < minDist) {
-        minDist = dist;
+      const dist = node.baseDist * scale;
+      const nx = cx + Math.cos(node.angle) * dist;
+      const ny = cy + Math.sin(node.angle) * (dist * 0.75);
+      const d = Math.hypot(mx - nx, my - ny);
+      if (d < minDist) {
+        minDist = d;
+        closest = node.rec;
+      }
+    }
+    if (closest) {
+      setActiveRec(closest);
+    }
+  };
+
+  const handleTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!e.touches[0]) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.touches[0].clientX - rect.left;
+    const my = e.touches[0].clientY - rect.top;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.44) / 320);
+    const scale = Math.max(0.4, baseScale);
+
+    let closest: MatchRecommendation | null = null;
+    let minDist = 38;
+
+    for (const node of nodePositions) {
+      const dist = node.baseDist * scale;
+      const nx = cx + Math.cos(node.angle) * dist;
+      const ny = cy + Math.sin(node.angle) * (dist * 0.75);
+      const d = Math.hypot(mx - nx, my - ny);
+      if (d < minDist) {
+        minDist = d;
         closest = node.rec;
       }
     }
@@ -201,24 +239,26 @@ export function LivingSynergyNetwork({
   };
 
   return (
-    <div className="relative w-full h-[620px] rounded-3xl border border-white/[0.08] bg-[#07090e] overflow-hidden shadow-2xl flex items-center justify-center">
+    <div className="relative w-full h-[520px] sm:h-[620px] rounded-3xl border border-white/[0.08] bg-[#07090e] overflow-hidden shadow-2xl flex items-center justify-center">
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}
-        className="w-full h-full block cursor-crosshair"
+        onTouchStart={handleTouch}
+        onTouchMove={handleTouch}
+        className="w-full h-full block cursor-crosshair touch-none"
       />
 
       {/* Center Core Marker */}
-      <div className="absolute inset-0 m-auto h-20 w-20 rounded-full bg-[#0a0c13]/90 border-2 border-indigo-500/40 p-1 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)] pointer-events-none">
+      <div className="absolute inset-0 m-auto h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-[#0a0c13]/90 border-2 border-indigo-500/40 p-1 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)] pointer-events-none">
         <div className="h-full w-full rounded-full bg-indigo-500/15 flex flex-col items-center justify-center text-center">
-          <span className="text-[9px] font-mono uppercase tracking-widest text-indigo-400">YOU</span>
-          <span className="text-[8px] font-mono text-neutral-400">ORIGIN</span>
+          <span className="text-[8px] sm:text-[9px] font-mono uppercase tracking-widest text-indigo-400">YOU</span>
+          <span className="text-[7px] sm:text-[8px] font-mono text-neutral-400">ORIGIN</span>
         </div>
       </div>
 
       {/* Floating Holographic Synergy Telemetry Card */}
       {activeRec && (
-        <div className="absolute bottom-6 right-6 w-88 max-w-[calc(100vw-3rem)] p-6 rounded-3xl border border-white/15 bg-[#0a0c13]/90 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] space-y-4 z-30 transition-all">
+        <div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 w-[calc(100vw-1.5rem)] sm:w-88 max-w-sm p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/15 bg-[#0a0c13]/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] space-y-3 sm:space-y-4 z-30 transition-all">
           <div className="flex items-center justify-between">
             <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-cyan-300 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/30">
               <Zap className="h-3 w-3" />

@@ -67,7 +67,7 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-16">
+    <div className="max-w-3xl mx-auto space-y-6 pb-16 px-4 sm:px-0">
       {/* Top Breadcrumb */}
       <div className="flex items-center justify-between">
         <Link

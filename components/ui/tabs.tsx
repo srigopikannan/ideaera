@@ -40,7 +40,7 @@ export function TabsList({
   return (
     <div
       className={cn(
-        "inline-flex h-11 items-center justify-start rounded-xl bg-muted/60 p-1 text-muted-foreground border border-border/60",
+        "inline-flex h-11 max-w-full overflow-x-auto no-scrollbar items-center justify-start rounded-xl bg-muted/60 p-1 text-muted-foreground border border-border/60",
         className
       )}
     >

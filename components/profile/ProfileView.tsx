@@ -146,9 +146,12 @@ export function ProfileView({
       ctx.clearRect(0, 0, width, height);
       const cx = width / 2;
       const cy = height / 2;
+      const baseScale = Math.min(1, (Math.min(width, height) * 0.45) / 295);
+      const scale = Math.max(0.42, baseScale);
 
       // Orbit Tracks
-      [135, 215, 295].forEach((r, idx) => {
+      [135, 215, 295].forEach((baseR, idx) => {
+        const r = baseR * scale;
         ctx.save();
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -166,13 +169,14 @@ export function ProfileView({
       });
 
       // Ambient Solar Star Glow
-      const starGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 85);
+      const glowR = Math.max(35, 85 * scale);
+      const starGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
       starGlow.addColorStop(0, "rgba(99, 102, 241, 0.35)");
       starGlow.addColorStop(0.6, "rgba(168, 85, 247, 0.12)");
       starGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.fillStyle = starGlow;
       ctx.beginPath();
-      ctx.arc(cx, cy, 85, 0, Math.PI * 2);
+      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
       ctx.fill();
 
       // Render Nodes
@@ -181,8 +185,9 @@ export function ProfileView({
           node.angle += node.speed;
         }
 
-        const nx = cx + Math.cos(node.angle) * node.radius;
-        const ny = cy + Math.sin(node.angle) * (node.radius * 0.7);
+        const r = node.radius * scale;
+        const nx = cx + Math.cos(node.angle) * r;
+        const ny = cy + Math.sin(node.angle) * (r * 0.7);
 
         const isHovered = activeNode?.id === node.id;
         const col = node.statusColor || "99, 102, 241";
@@ -246,13 +251,44 @@ export function ProfileView({
     const my = e.clientY - rect.top;
     const cx = rect.width / 2;
     const cy = rect.height / 2;
+    const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.45) / 295);
+    const scale = Math.max(0.42, baseScale);
 
     let found: OrbitNode | null = null;
     for (const node of nodes) {
-      const nx = cx + Math.cos(node.angle) * node.radius;
-      const ny = cy + Math.sin(node.angle) * (node.radius * 0.7);
+      const r = node.radius * scale;
+      const nx = cx + Math.cos(node.angle) * r;
+      const ny = cy + Math.sin(node.angle) * (r * 0.7);
       const dist = Math.hypot(mx - nx, my - ny);
       if (dist < 25) {
+        found = node;
+        break;
+      }
+    }
+
+    setActiveNode(found);
+    setIsPaused(Boolean(found));
+  };
+
+  const handleCanvasTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!e.touches[0]) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.touches[0].clientX - rect.left;
+    const my = e.touches[0].clientY - rect.top;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const baseScale = Math.min(1, (Math.min(rect.width, rect.height) * 0.45) / 295);
+    const scale = Math.max(0.42, baseScale);
+
+    let found: OrbitNode | null = null;
+    for (const node of nodes) {
+      const r = node.radius * scale;
+      const nx = cx + Math.cos(node.angle) * r;
+      const ny = cy + Math.sin(node.angle) * (r * 0.7);
+      const dist = Math.hypot(mx - nx, my - ny);
+      if (dist < 30) {
         found = node;
         break;
       }
@@ -304,36 +340,36 @@ export function ProfileView({
   return (
     <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden select-none">
       {/* Floating Top HUD */}
-      <div className="absolute top-6 left-6 right-6 z-30 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-4 sm:top-6 left-3 sm:left-6 right-3 sm:right-6 z-30 flex items-center justify-between gap-2 pointer-events-none">
         {/* Left User Identity Telemetry Pill */}
-        <div className="pointer-events-auto inline-flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl">
+        <div className="pointer-events-auto inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl shrink-0">
           <span className="h-2 w-2 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.9)] animate-pulse" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-400">
+          <span className="text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.24em] text-neutral-400 hidden xs:inline">
             PERSONAL UNIVERSE
           </span>
-          <span className="text-[10px] font-mono text-neutral-600">/</span>
-          <span className="text-xs text-white font-light">
+          <span className="text-[10px] font-mono text-neutral-600 hidden xs:inline">/</span>
+          <span className="text-xs text-white font-light truncate max-w-[120px] sm:max-w-none">
             {profile.full_name || "Innovator"}
           </span>
         </div>
 
         {/* Right Actions */}
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
           {isCurrentUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Link
                 href="/ideas/create"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>Orbit Idea</span>
+                <span className="hidden xs:inline">Orbit Idea</span>
               </Link>
               <Link
                 href="/profile/edit"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-white/20 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors backdrop-blur-md"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full border border-white/20 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors backdrop-blur-md"
               >
                 <Edit3 className="h-3.5 w-3.5" />
-                <span>Edit Profile</span>
+                <span className="hidden xs:inline">Edit Profile</span>
               </Link>
             </div>
           ) : (
@@ -341,7 +377,7 @@ export function ProfileView({
               onClick={handleConnect}
               disabled={isConnecting || connectionStatus !== "none"}
               className={cn(
-                "inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold uppercase tracking-wider transition-colors shadow-lg",
+                "inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs font-semibold uppercase tracking-wider transition-colors shadow-lg",
                 connectionStatus === "connected"
                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                   : connectionStatus === "pending_sent"
@@ -369,16 +405,18 @@ export function ProfileView({
         <canvas
           ref={canvasRef}
           onMouseMove={handleCanvasMouseMove}
+          onTouchStart={handleCanvasTouch}
+          onTouchMove={handleCanvasTouch}
           onMouseLeave={() => {
             setActiveNode(null);
             setIsPaused(false);
           }}
-          className="w-full h-full block cursor-crosshair"
+          className="w-full h-full block cursor-crosshair touch-none"
         />
 
         {/* Central Sun: Innovator Identity Core */}
-        <div className="absolute inset-0 m-auto h-24 w-24 rounded-full bg-[#0a0c13] border-2 border-indigo-500/50 p-1 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)] pointer-events-none">
-          <div className="h-full w-full rounded-full overflow-hidden bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-2xl">
+        <div className="absolute inset-0 m-auto h-16 w-16 sm:h-24 sm:w-24 rounded-full bg-[#0a0c13] border-2 border-indigo-500/50 p-1 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.4)] pointer-events-none">
+          <div className="h-full w-full rounded-full overflow-hidden bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-lg sm:text-2xl">
             {profile.avatar_url ? (
               <img
                 src={profile.avatar_url}
@@ -393,13 +431,13 @@ export function ProfileView({
 
         {/* Floating Active Node Telemetry Card */}
         {activeNode && (
-          <div className="absolute bottom-8 right-8 w-80 p-5 rounded-2xl border border-white/15 bg-[#0a0c13]/95 backdrop-blur-2xl shadow-2xl space-y-3 z-30 animate-fade-in">
+          <div className="absolute bottom-4 right-4 sm:bottom-8 sm:right-8 w-[calc(100vw-2rem)] max-w-xs p-4 sm:p-5 rounded-2xl border border-white/15 bg-[#0a0c13]/95 backdrop-blur-2xl shadow-2xl space-y-3 z-30 animate-fade-in">
             <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-400">
               <span className="text-indigo-400 font-semibold">{activeNode.subtitle}</span>
               <span className="text-neutral-500">{activeNode.type.toUpperCase()}</span>
             </div>
 
-            <h3 className="text-sm sm:text-base font-light text-white leading-snug">
+            <h3 className="text-sm sm:text-base font-light text-white leading-snug break-words">
               {activeNode.title}
             </h3>
 

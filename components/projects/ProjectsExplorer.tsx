@@ -24,7 +24,7 @@ export function ProjectsExplorer({ initialProjects }: ProjectsExplorerProps) {
   }, [projects, selectedFilter]);
 
   return (
-    <div className="relative w-full min-h-[calc(100vh-4rem)] p-6 sm:p-12 space-y-12 select-none overflow-x-hidden">
+    <div className="relative w-full min-h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-12 space-y-8 sm:space-y-12 select-none overflow-x-hidden">
       {/* Floating Top HUD */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
         <div className="space-y-1">
@@ -41,13 +41,13 @@ export function ProjectsExplorer({ initialProjects }: ProjectsExplorerProps) {
 
         {/* Filter Pills & Launch Action */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl">
+          <div className="inline-flex items-center max-w-full overflow-x-auto no-scrollbar p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shrink-0">
             {["All", "launched", "beta", "in_development", "idea"].map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedFilter(s)}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+                  "px-3 py-1.5 sm:px-3.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
                   selectedFilter === s
                     ? "bg-white text-black font-semibold shadow-lg"
                     : "text-neutral-400 hover:text-white"
@@ -60,7 +60,7 @@ export function ProjectsExplorer({ initialProjects }: ProjectsExplorerProps) {
 
           <Link
             href="/projects/create"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
+            className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-xl hover:scale-105"
           >
             <PlusCircle className="h-3.5 w-3.5" />
             <span>Launch Venture</span>
@@ -107,7 +107,7 @@ export function ProjectsExplorer({ initialProjects }: ProjectsExplorerProps) {
                 onClick={() => router.push("/projects/" + proj.id)}
                 className={cn(
                   colSpan,
-                  "group relative rounded-3xl border border-white/[0.08] bg-[#0a0c13] p-8 sm:p-10 cursor-pointer overflow-hidden transition-all duration-500 hover:border-white/20 hover:shadow-2xl hover:-translate-y-1 space-y-6"
+                  "group relative rounded-3xl border border-white/[0.08] bg-[#0a0c13] p-5 sm:p-10 cursor-pointer overflow-hidden transition-all duration-500 hover:border-white/20 hover:shadow-2xl hover:-translate-y-1 space-y-6"
                 )}
                 style={{
                   boxShadow: "0 10px 40px -10px " + glow,

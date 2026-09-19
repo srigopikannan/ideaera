@@ -162,8 +162,8 @@ export function IdeaDetailView({
   return (
     <div ref={containerRef} className="relative w-full min-h-screen pb-32 select-none">
       {/* Fixed Sticky Narrative Progression HUD */}
-      <div className="sticky top-4 z-40 px-6 max-w-6xl mx-auto flex items-center justify-between pointer-events-none">
-        <div className="pointer-events-auto inline-flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl">
+      <div className="sticky top-4 z-40 px-3 sm:px-6 max-w-6xl mx-auto flex items-center justify-between gap-2 pointer-events-none">
+        <div className="pointer-events-auto inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl shrink-0">
           <Link
             href="/ideas"
             className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
@@ -174,32 +174,34 @@ export function IdeaDetailView({
 
           <div className="h-3 w-[1px] bg-white/10" />
 
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
             <span className="text-[10px] font-mono tracking-wider text-indigo-300 uppercase">
-              {activeDim.id} // {activeDim.name}
+              {activeDim.id} // <span className="hidden xs:inline">{activeDim.name}</span>
             </span>
           </div>
         </div>
 
         {/* Right Actions */}
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={handleLike}
             className={cn(
-              "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono transition-all border backdrop-blur-xl shadow-lg",
+              "inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-mono transition-all border backdrop-blur-xl shadow-lg",
               isLiked
                 ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-[0_0_15px_rgba(129,140,248,0.4)]"
                 : "bg-[#0a0c13]/80 text-neutral-300 border-white/10 hover:border-white/30"
             )}
+            title="Endorsements"
           >
             <Heart className={cn("h-3 w-3", isLiked && "fill-indigo-400 text-indigo-400")} />
-            <span>{likesCount} Endorsements</span>
+            <span>{likesCount} <span className="hidden sm:inline">Endorsements</span></span>
           </button>
 
           <button
             onClick={handleShare}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-mono bg-[#0a0c13]/80 text-neutral-300 border border-white/10 hover:border-white/30 transition-colors backdrop-blur-xl shadow-lg"
+            className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-mono bg-[#0a0c13]/80 text-neutral-300 border border-white/10 hover:border-white/30 transition-colors backdrop-blur-xl shadow-lg"
+            title="Share"
           >
             {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Share2 className="h-3 w-3" />}
             <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
@@ -244,9 +246,9 @@ export function IdeaDetailView({
       </div>
 
       {/* DIMENSION 01: THE IDEA (Hero Composition) */}
-      <section className="relative min-h-[85vh] flex flex-col justify-center px-6 sm:px-12 max-w-6xl mx-auto">
+      <section className="relative min-h-[85vh] flex flex-col justify-center px-5 sm:px-12 max-w-6xl mx-auto">
         {/* Background Celestial Idea Core Organism */}
-        <div className="absolute right-0 sm:right-12 top-1/2 -translate-y-1/2 w-full sm:w-[500px] h-[500px] pointer-events-none opacity-80 z-0">
+        <div className="absolute right-0 sm:right-12 top-1/2 -translate-y-1/2 w-full max-w-[280px] sm:max-w-[500px] h-[280px] sm:h-[500px] pointer-events-none opacity-80 z-0">
           <CelestialIdeaCore
             scrollProgress={scrollProgress}
             category={currentIdea.category}
@@ -265,7 +267,7 @@ export function IdeaDetailView({
             </span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.05]">
+          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.08] sm:leading-[1.05] break-words">
             {currentIdea.title}
           </h1>
 

@@ -71,7 +71,7 @@ export function ConnectionsManager({
       : sentRequests;
 
   return (
-    <div className="relative w-full min-h-[calc(100vh-4rem)] p-6 sm:p-12 space-y-10 select-none overflow-x-hidden">
+    <div className="relative w-full min-h-[calc(100vh-4rem)] p-4 sm:p-8 lg:p-12 space-y-6 sm:space-y-10 select-none overflow-x-hidden">
       {/* Floating Top HUD */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
         <div className="space-y-1">
@@ -87,39 +87,42 @@ export function ConnectionsManager({
         </div>
 
         {/* Tab Switcher Capsule */}
-        <div className="inline-flex items-center p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl">
+        <div className="inline-flex items-center max-w-full overflow-x-auto no-scrollbar p-1 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shrink-0">
           <button
             onClick={() => setActiveTab("all")}
             className={cn(
-              "px-4 py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+              "px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
               activeTab === "all"
                 ? "bg-white text-black font-semibold shadow-lg"
                 : "text-neutral-400 hover:text-white"
             )}
           >
-            Established Bonds ({allConnections.length})
+            <span className="hidden sm:inline">Established Bonds</span>
+            <span className="sm:hidden">Bonds</span> ({allConnections.length})
           </button>
           <button
             onClick={() => setActiveTab("incoming")}
             className={cn(
-              "px-4 py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+              "px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
               activeTab === "incoming"
                 ? "bg-white text-black font-semibold shadow-lg"
                 : "text-neutral-400 hover:text-white"
             )}
           >
-            Incoming Signals ({incomingRequests.length})
+            <span className="hidden sm:inline">Incoming Signals</span>
+            <span className="sm:hidden">Incoming</span> ({incomingRequests.length})
           </button>
           <button
             onClick={() => setActiveTab("sent")}
             className={cn(
-              "px-4 py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all",
+              "px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all shrink-0",
               activeTab === "sent"
                 ? "bg-white text-black font-semibold shadow-lg"
                 : "text-neutral-400 hover:text-white"
             )}
           >
-            Transmitted ({sentRequests.length})
+            <span className="hidden sm:inline">Transmitted</span>
+            <span className="sm:hidden">Sent</span> ({sentRequests.length})
           </button>
         </div>
       </div>
@@ -155,7 +158,7 @@ export function ConnectionsManager({
             return (
               <div
                 key={conn.id}
-                className="group relative rounded-3xl border border-white/10 bg-[#0a0c13]/70 backdrop-blur-xl p-6 sm:p-8 space-y-6 hover:border-indigo-500/40 hover:bg-[#0e111a] transition-all duration-300 shadow-xl flex flex-col justify-between"
+                className="group relative rounded-3xl border border-white/10 bg-[#0a0c13]/70 backdrop-blur-xl p-5 sm:p-8 space-y-5 sm:space-y-6 hover:border-indigo-500/40 hover:bg-[#0e111a] transition-all duration-300 shadow-xl flex flex-col justify-between"
               >
                 <div className="space-y-4">
                   {/* Status Indicator */}

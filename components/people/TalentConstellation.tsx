@@ -26,6 +26,17 @@ export function TalentConstellation({
   const [mouseOffset, setMouseOffset] = React.useState({ x: 0, y: 0 });
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const x = (e.clientX / window.innerWidth - 0.5) * 35;
@@ -60,7 +71,9 @@ export function TalentConstellation({
     const total = Math.max(filteredPeople.length, 1);
     return filteredPeople.map((person, idx) => {
       const angle = (idx / total) * Math.PI * 2 - Math.PI / 2;
-      const dist = 32 + (idx % 3) * 10; // percentage from center
+      const dist = isMobile
+        ? 18 + (idx % 3) * 6
+        : 32 + (idx % 3) * 10; // percentage from center
       const depth = 0.85 + (idx % 4) * 0.15;
 
       const x = 50 + Math.cos(angle) * dist;
@@ -68,13 +81,13 @@ export function TalentConstellation({
 
       return {
         person,
-        x: Math.min(Math.max(x, 10), 90),
-        y: Math.min(Math.max(y, 15), 85),
+        x: Math.min(Math.max(x, isMobile ? 32 : 10), isMobile ? 68 : 90),
+        y: Math.min(Math.max(y, isMobile ? 20 : 15), isMobile ? 80 : 85),
         angle,
         depth,
       };
     });
-  }, [filteredPeople]);
+  }, [filteredPeople, isMobile]);
 
   const hoveredNode = nodePositions.find((n) => n.person.id === hoveredId);
 
@@ -105,8 +118,8 @@ export function TalentConstellation({
 
       {/* Central Star: YOU / Observatory */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-        <div className="relative h-20 w-20 rounded-full border border-indigo-500/40 bg-[#0a0c13] flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)]">
-          <div className="h-10 w-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-mono text-[10px] uppercase font-bold tracking-wider animate-pulse">
+        <div className="relative h-14 w-14 sm:h-20 sm:w-20 rounded-full border border-indigo-500/40 bg-[#0a0c13] flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)]">
+          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-mono text-[9px] sm:text-[10px] uppercase font-bold tracking-wider animate-pulse">
             YOU
           </div>
           {/* Gravitational Wave */}
@@ -159,7 +172,7 @@ export function TalentConstellation({
 
                 {/* Person Card Node */}
                 <div
-                  className="relative p-4 rounded-2xl border backdrop-blur-xl transition-all duration-300 shadow-2xl flex items-center gap-3.5 max-w-xs"
+                  className="relative p-3 sm:p-4 rounded-2xl border backdrop-blur-xl transition-all duration-300 shadow-2xl flex items-center gap-2.5 sm:gap-3.5 w-[210px] sm:w-[280px] sm:max-w-xs"
                   style={{
                     backgroundColor: isHovered ? "rgba(10, 12, 19, 0.95)" : "rgba(10, 12, 19, 0.75)",
                     borderColor: isHovered ? "rgba(99, 102, 241, 0.8)" : "rgba(255, 255, 255, 0.1)",
@@ -169,7 +182,7 @@ export function TalentConstellation({
                   }}
                 >
                   {/* Avatar */}
-                  <div className="h-11 w-11 rounded-xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-sm overflow-hidden flex-shrink-0">
+                  <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-xl bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-xs sm:text-sm overflow-hidden flex-shrink-0">
                     {node.person.avatar_url ? (
                       <img
                         src={node.person.avatar_url}

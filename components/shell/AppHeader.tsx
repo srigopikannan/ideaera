@@ -59,12 +59,12 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="h-16 border-b border-white/[0.08] bg-[#07080c]/85 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between sticky top-0 z-20">
+      <header className="h-16 w-full max-w-full border-b border-white/[0.08] bg-[#07080c]/85 backdrop-blur-xl px-3.5 sm:px-8 flex items-center justify-between sticky top-0 z-20 overflow-x-clip">
         {/* Mobile Menu Toggle & Brand */}
-        <div className="flex items-center gap-3 md:hidden">
+        <div className="flex items-center gap-2.5 sm:gap-3 md:hidden shrink-0">
           <button
             onClick={() => setIsMobileNavOpen(true)}
-            className="p-2 rounded-lg text-neutral-400 hover:text-white"
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-white"
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
@@ -72,7 +72,7 @@ export function AppHeader() {
 
           <Link href="/dashboard" className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.8)]" />
-            <span className="font-bold text-xs tracking-[0.24em] uppercase text-white">IDEA ERA</span>
+            <span className="font-bold text-xs tracking-[0.22em] sm:tracking-[0.24em] uppercase text-white">IDEA ERA</span>
           </Link>
         </div>
 
@@ -95,13 +95,25 @@ export function AppHeader() {
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Mobile search trigger */}
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open-global-search"));
+            }}
+            className="sm:hidden p-2 rounded-full border border-white/10 bg-white/[0.02] text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Search"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+
           <Link
             href="/ideas/create"
-            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-white/20 bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3.5 rounded-full border border-white/20 bg-white text-black text-xs font-semibold uppercase tracking-[0.16em] hover:bg-neutral-200 transition-all shadow-sm shrink-0"
+            title="Create Idea"
           >
             <PlusCircle className="h-3.5 w-3.5" />
-            <span>Create</span>
+            <span className="hidden sm:inline">Create</span>
           </Link>
 
           <NotificationCenter />

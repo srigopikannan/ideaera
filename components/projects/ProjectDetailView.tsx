@@ -151,10 +151,10 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
   ];
 
   return (
-    <div className="relative w-full min-h-screen pb-32 select-none">
+    <div className="relative w-full min-h-screen pb-32 select-none overflow-x-hidden">
       {/* Sticky Progression HUD */}
-      <div className="sticky top-4 z-40 px-6 max-w-6xl mx-auto flex items-center justify-between pointer-events-none">
-        <div className="pointer-events-auto inline-flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl">
+      <div className="sticky top-4 z-40 px-3.5 sm:px-6 max-w-6xl mx-auto flex items-center justify-between pointer-events-none">
+        <div className="pointer-events-auto inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl">
           <Link
             href="/projects"
             className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
@@ -174,13 +174,13 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
         </div>
 
         {/* Right Actions */}
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
           {currentProject.website_url && (
             <a
               href={currentProject.website_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-neutral-200 transition-all shadow-xl"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-neutral-200 transition-all shadow-xl"
             >
               <Globe className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Live System</span>
@@ -192,7 +192,7 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
               href={currentProject.repository_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono text-neutral-300 hover:text-white border border-white/10 bg-[#0a0c13]/80 backdrop-blur-xl shadow-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-mono text-neutral-300 hover:text-white border border-white/10 bg-[#0a0c13]/80 backdrop-blur-xl shadow-lg transition-colors"
             >
               <Github className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Code</span>
@@ -254,9 +254,9 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
       )}
 
       {/* Project Hero Dimension */}
-      <section className="relative min-h-[75vh] flex flex-col justify-center px-6 sm:px-12 max-w-6xl mx-auto space-y-8">
+      <section className="relative min-h-[50vh] sm:min-h-[75vh] flex flex-col justify-center px-4 sm:px-12 max-w-6xl mx-auto space-y-6 sm:space-y-8 pt-6 sm:pt-0">
         <div className="space-y-4 max-w-3xl">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="px-3.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase tracking-[0.24em]">
               VENTURE // {currentProject.status.replace("_", " ")}
             </span>
@@ -265,16 +265,16 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
             </span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.05]">
+          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.05] break-words">
             {currentProject.name}
           </h1>
 
-          <p className="text-base sm:text-xl text-neutral-300 font-light leading-relaxed whitespace-pre-line">
+          <p className="text-sm sm:text-xl text-neutral-300 font-light leading-relaxed whitespace-pre-line break-words">
             {currentProject.description}
           </p>
 
           <div className="flex items-center gap-3 pt-2">
-            <div className="h-9 w-9 rounded-full bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-sm overflow-hidden">
+            <div className="h-9 w-9 rounded-full bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold text-sm overflow-hidden shrink-0">
               {currentProject.owner?.avatar_url ? (
                 <img
                   src={currentProject.owner.avatar_url}
@@ -285,14 +285,14 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
                 (currentProject.owner?.full_name || "O").charAt(0).toUpperCase()
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <Link
                 href={`/people/${currentProject.owner?.username || "creator"}`}
-                className="text-sm font-light text-white hover:text-emerald-300 transition-colors block"
+                className="text-sm font-light text-white hover:text-emerald-300 transition-colors block truncate"
               >
                 {currentProject.owner?.full_name || "Lead Architect"}
               </Link>
-              <span className="text-[11px] font-mono text-neutral-500">
+              <span className="text-[11px] font-mono text-neutral-500 truncate block">
                 @{currentProject.owner?.username || "creator"}
               </span>
             </div>
@@ -301,9 +301,9 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
       </section>
 
       {/* VISUAL EVOLUTION TIMELINE SPINE */}
-      <section className="py-12 px-6 sm:px-12 max-w-6xl mx-auto">
-        <div className="p-8 sm:p-12 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-8 shadow-2xl relative overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+      <section className="py-8 sm:py-12 px-4 sm:px-12 max-w-6xl mx-auto">
+        <div className="p-5 sm:p-12 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-6 sm:space-y-8 shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-4">
             <div className="flex items-center gap-2">
               <Rocket className="h-4 w-4 text-emerald-400" />
               <span className="text-xs font-mono uppercase tracking-[0.26em] text-white">
@@ -316,13 +316,13 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
           </div>
 
           {/* Timeline Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 relative">
             {stages.map((stage) => (
-              <div key={stage.id} className="space-y-3 text-center sm:text-left">
-                <div className="flex items-center gap-2 justify-center sm:justify-start">
+              <div key={stage.id} className="space-y-2 text-left">
+                <div className="flex items-center gap-2 justify-start">
                   <div
                     className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center border text-xs font-mono transition-all",
+                      "h-8 w-8 rounded-full flex items-center justify-center border text-xs font-mono transition-all shrink-0",
                       stage.done
                         ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)]"
                         : "border-white/10 bg-white/[0.02] text-neutral-600"
@@ -343,17 +343,17 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
 
       {/* System Framework Modules */}
       {currentProject.technologies && currentProject.technologies.length > 0 && (
-        <section className="py-8 px-6 sm:px-12 max-w-6xl mx-auto space-y-4">
+        <section className="py-6 sm:py-8 px-4 sm:px-12 max-w-6xl mx-auto space-y-4">
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.26em] text-neutral-400">
             <Code2 className="h-3.5 w-3.5 text-indigo-400" />
             <span>TECHNOLOGY ARTIFACTS</span>
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap gap-2 sm:gap-2.5">
             {currentProject.technologies.map((t) => (
               <span
                 key={t}
-                className="px-4 py-2 rounded-2xl border border-white/10 bg-white/[0.02] text-xs font-mono text-neutral-300"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-white/10 bg-white/[0.02] text-xs font-mono text-neutral-300"
               >
                 {t}
               </span>
@@ -363,7 +363,7 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
       )}
 
       {/* Venture Team & Collaborators */}
-      <section className="py-8 px-6 sm:px-12 max-w-6xl mx-auto space-y-4 border-t border-white/[0.06]">
+      <section className="py-6 sm:py-8 px-4 sm:px-12 max-w-6xl mx-auto space-y-4 border-t border-white/[0.06]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.26em] text-neutral-400">
             <Users className="h-3.5 w-3.5 text-emerald-400" />

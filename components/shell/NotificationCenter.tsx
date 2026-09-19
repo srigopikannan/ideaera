@@ -123,7 +123,7 @@ export function NotificationCenter() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-84 sm:w-96 rounded-3xl border border-white/15 bg-[#0a0c13]/95 text-white shadow-[0_25px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl overflow-hidden z-50 animate-fade-in">
+        <div className="absolute -right-12 sm:right-0 mt-3 w-[calc(100vw-2rem)] max-w-sm sm:w-96 rounded-3xl border border-white/15 bg-[#0a0c13]/95 text-white shadow-[0_25px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl overflow-hidden z-50 animate-fade-in">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
             <div className="flex items-center gap-2">

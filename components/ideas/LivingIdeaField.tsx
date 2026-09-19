@@ -34,19 +34,27 @@ export function LivingIdeaField({
   const [activeTransitionId, setActiveTransitionId] = React.useState<string | null>(null);
   const [mouseOffset, setMouseOffset] = React.useState({ x: 0, y: 0 });
   const [likesMap, setLikesMap] = React.useState<Record<string, { liked: boolean; count: number }>>({});
+  const [isMobile, setIsMobile] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Parallax tracking
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 40;
-      const y = (e.clientY / window.innerHeight - 0.5) * 40;
+      const x = (e.clientX / window.innerWidth - 0.5) * (isMobile ? 15 : 40);
+      const y = (e.clientY / window.innerHeight - 0.5) * (isMobile ? 15 : 40);
       setMouseOffset({ x, y });
     };
 
     window.addEventListener("mousemove", handleMouseMove, { passive: true });
     return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
+  }, [isMobile]);
 
   // Compute deterministic, beautiful organic spatial positions for ideas
   const nodePositions = React.useMemo<IdeaNodePosition[]>(() => {
@@ -63,15 +71,20 @@ export function LivingIdeaField({
       { x: 36, y: 84 },
     ];
 
+    const minX = isMobile ? 30 : 12;
+    const maxX = isMobile ? 70 : 86;
+    const minY = isMobile ? 24 : 16;
+    const maxY = isMobile ? 76 : 84;
+
     return ideas.map((idea, idx) => {
       const baseCoord = coords[idx % coords.length];
       // Deterministic offset per idea ID hash
       const hash = idea.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-      const jitterX = ((hash % 15) - 7);
-      const jitterY = (((hash * 3) % 15) - 7);
+      const jitterX = isMobile ? ((hash % 9) - 4) : ((hash % 15) - 7);
+      const jitterY = isMobile ? (((hash * 3) % 9) - 4) : (((hash * 3) % 15) - 7);
 
       const resonance = (idea.likes_count || 0) + (idea.comments_count || 0);
-      const scale = Math.min(Math.max(0.95 + resonance * 0.05, 0.95), 1.3);
+      const scale = isMobile ? 0.95 : Math.min(Math.max(0.95 + resonance * 0.05, 0.95), 1.3);
       const depth = 0.85 + (hash % 4) * 0.15;
 
       let color = "99, 102, 241"; // Indigo
@@ -82,14 +95,14 @@ export function LivingIdeaField({
 
       return {
         idea,
-        x: Math.min(Math.max(baseCoord.x + jitterX, 12), 86),
-        y: Math.min(Math.max(baseCoord.y + jitterY, 16), 84),
+        x: Math.min(Math.max(baseCoord.x + jitterX, minX), maxX),
+        y: Math.min(Math.max(baseCoord.y + jitterY, minY), maxY),
         scale,
         depth,
         color,
       };
     });
-  }, [ideas]);
+  }, [ideas, isMobile]);
 
   const handleLike = async (e: React.MouseEvent, idea: Idea) => {
     e.preventDefault();
@@ -243,7 +256,7 @@ export function LivingIdeaField({
 
                 {/* Celestial Node Core */}
                 <div
-                  className="relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 shadow-2xl max-w-xs"
+                  className="relative p-3.5 sm:p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 shadow-2xl w-[220px] sm:w-[280px] sm:max-w-xs"
                   style={{
                     backgroundColor: isHovered ? "rgba(10, 12, 19, 0.95)" : "rgba(10, 12, 19, 0.75)",
                     borderColor: isHovered

@@ -248,7 +248,7 @@ export default function CreateIdeaPage() {
   };
 
   return (
-    <div className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col justify-between p-6 sm:p-12 select-none overflow-x-hidden">
+    <div className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col justify-between p-4 sm:p-8 lg:p-12 select-none overflow-x-hidden">
       {/* Top Bar Navigation */}
       <div className="flex items-center justify-between z-20">
         <Link
@@ -259,16 +259,16 @@ export default function CreateIdeaPage() {
           <span>Exit Idea Lab</span>
         </Link>
 
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-white/10 bg-[#0a0c13]/80 backdrop-blur-md">
+        <div className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1 rounded-full border border-white/10 bg-[#0a0c13]/80 backdrop-blur-md">
           <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-400">
+          <span className="text-[10px] font-mono uppercase tracking-[0.18em] sm:tracking-[0.22em] text-neutral-400">
             INCUBATION CHAMBER
           </span>
         </div>
       </div>
 
       {/* Main Idea Lab Studio Form */}
-      <form onSubmit={handleSubmit} className="relative z-10 max-w-4xl w-full mx-auto space-y-8 my-auto py-8">
+      <form onSubmit={handleSubmit} className="relative z-10 max-w-4xl w-full mx-auto space-y-6 sm:space-y-8 my-auto py-6 sm:py-8">
         {/* Error Alert */}
         {error && (
           <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-mono text-center">
@@ -286,7 +286,7 @@ export default function CreateIdeaPage() {
             placeholder="Name your thesis..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full text-center text-3xl sm:text-5xl lg:text-6xl font-extralight text-white bg-transparent placeholder:text-neutral-700 focus:outline-none tracking-tight leading-tight"
+            className="w-full text-center text-2xl sm:text-5xl lg:text-6xl font-extralight text-white bg-transparent placeholder:text-neutral-700 focus:outline-none tracking-tight leading-tight"
             autoFocus
             required
           />

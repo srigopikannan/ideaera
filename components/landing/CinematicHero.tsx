@@ -20,7 +20,7 @@ export function CinematicHero() {
   const opacity = Math.max(1 - scrollY / 650, 0);
 
   return (
-    <section className="relative h-screen min-h-[680px] w-full flex flex-col justify-between pt-28 sm:pt-36 pb-10 sm:pb-14 px-8 sm:px-14 lg:px-20 z-10 select-none">
+    <section className="relative h-screen min-h-[680px] w-full flex flex-col justify-between pt-24 sm:pt-36 pb-10 sm:pb-14 px-5 sm:px-14 lg:px-20 z-10 select-none">
       <div />
 
       {/* Main Content with Parallax Exit */}
@@ -33,14 +33,14 @@ export function CinematicHero() {
       >
         <div className="lg:col-span-8 xl:col-span-7 space-y-6 sm:space-y-8 text-left">
           {/* Eyebrow */}
-          <div className="inline-flex items-center gap-3">
-            <p className="text-[11px] sm:text-xs font-mono tracking-[0.38em] text-neutral-300/90 uppercase">
+          <div className="inline-flex items-center gap-2 sm:gap-3 flex-wrap">
+            <p className="text-[10px] sm:text-xs font-mono tracking-[0.22em] sm:tracking-[0.38em] text-neutral-300/90 uppercase">
               IDEAS &nbsp;•&nbsp; PEOPLE &nbsp;•&nbsp; POSSIBILITIES
             </p>
           </div>
 
           {/* Colossal Headline matching reference image */}
-          <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.2rem] xl:text-[6.0rem] tracking-[-0.025em] leading-[0.96] uppercase text-white">
+          <h1 className="text-3xl sm:text-6xl md:text-7xl lg:text-[5.2rem] xl:text-[6.0rem] tracking-[-0.025em] leading-[0.98] sm:leading-[0.96] uppercase text-white">
             <span className="font-extralight block text-neutral-100">
               EVERY GREAT THING
             </span>
@@ -50,15 +50,15 @@ export function CinematicHero() {
           </h1>
 
           {/* Subtitle */}
-          <p className="text-base sm:text-lg md:text-xl text-neutral-300 font-light max-w-xl leading-relaxed">
+          <p className="text-sm sm:text-lg md:text-xl text-neutral-300 font-light max-w-xl leading-relaxed">
             Discover ideas. Find your people. Build what comes next.
           </p>
 
           {/* Pill CTAs matching reference image */}
-          <div className="pt-4 sm:pt-6 flex flex-wrap items-center gap-4 sm:gap-6">
+          <div className="pt-3 sm:pt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-6">
             <Link
               href="/ideas"
-              className="group inline-flex items-center justify-center gap-3 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full bg-white text-black font-bold text-xs uppercase tracking-[0.2em] shadow-[0_0_35px_rgba(255,255,255,0.25)] hover:bg-neutral-200 hover:scale-[1.03] transition-all duration-300"
+              className="group inline-flex items-center justify-center gap-3 px-7 sm:px-10 py-3.5 sm:py-4 rounded-full bg-white text-black font-bold text-xs uppercase tracking-[0.2em] shadow-[0_0_35px_rgba(255,255,255,0.25)] hover:bg-neutral-200 hover:scale-[1.03] transition-all duration-300 text-center"
             >
               <span>EXPLORE IDEAS</span>
               <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 stroke-[2.5]" />
@@ -66,7 +66,7 @@ export function CinematicHero() {
 
             <Link
               href="/ideas/create"
-              className="group inline-flex items-center justify-center gap-3 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full border border-white/30 bg-black/40 text-white font-medium text-xs uppercase tracking-[0.2em] backdrop-blur-md hover:bg-white/10 hover:border-white/60 hover:scale-[1.02] transition-all duration-300"
+              className="group inline-flex items-center justify-center gap-3 px-7 sm:px-10 py-3.5 sm:py-4 rounded-full border border-white/30 bg-black/40 text-white font-medium text-xs uppercase tracking-[0.2em] backdrop-blur-md hover:bg-white/10 hover:border-white/60 hover:scale-[1.02] transition-all duration-300 text-center"
             >
               <span>SHARE YOUR IDEA</span>
               <ArrowUpRight className="h-4 w-4 opacity-80 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 stroke-[2]" />

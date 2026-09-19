@@ -22,6 +22,12 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import {
+  getStatesAction,
+  getCitiesAction,
+  getCollegesAction,
+} from "@/app/(dashboard)/actions/reference-data";
 
 interface TeammateDiscoveryProps {
   people: Profile[];
@@ -242,50 +248,82 @@ export function TeammateDiscovery({
         <div className="p-5 rounded-2xl border border-white/10 bg-[#0a0c13] space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* General Query */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Name, handle, or title..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/10 bg-white/[0.02] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
+            <div>
+              <label className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider mb-1.5 block">
+                Keyword / Builder
+              </label>
+              <div className="relative flex items-center w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+                <Search className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Name, handle, role..."
+                  className="w-full bg-transparent text-xs text-white placeholder:text-neutral-600 focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="p-1 text-muted-foreground hover:text-white"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* State Filter */}
+            <div>
+              <SearchableSelect
+                label="State"
+                placeholder="All States..."
+                value={stateFilter}
+                leftIcon={<Building className="h-3.5 w-3.5 text-cyan-400" />}
+                onSearch={(q) => getStatesAction(q)}
+                onSelect={(item) => {
+                  setStateFilter(item.name);
+                  setCityFilter("");
+                }}
+                onClear={() => {
+                  setStateFilter("");
+                  setCityFilter("");
+                }}
+                emptyMessage="No matching state found."
+              />
+            </div>
+
+            {/* City Filter — State Dependent */}
+            <div>
+              <SearchableSelect
+                label="City"
+                placeholder="All Cities..."
+                value={cityFilter}
+                disabled={!stateFilter.trim()}
+                disabledMessage="Select state first"
+                leftIcon={<MapPin className="h-3.5 w-3.5 text-cyan-400" />}
+                onSearch={(q) => getCitiesAction(stateFilter, q)}
+                onSelect={(item) => setCityFilter(item.name)}
+                onClear={() => setCityFilter("")}
+                emptyMessage={
+                  stateFilter
+                    ? `No cities found in ${stateFilter}.`
+                    : "Select a state first."
+                }
               />
             </div>
 
             {/* College Filter */}
-            <div className="relative">
-              <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
-              <input
-                type="text"
+            <div>
+              <SearchableSelect
+                label="College / Institute"
+                placeholder="All Institutions..."
                 value={collegeFilter}
-                onChange={(e) => setCollegeFilter(e.target.value)}
-                placeholder="College / University..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/10 bg-white/[0.02] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
-              />
-            </div>
-
-            {/* City Filter */}
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
-              <input
-                type="text"
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-                placeholder="City (e.g. Coimbatore)..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/10 bg-white/[0.02] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
-              />
-            </div>
-
-            {/* State Filter */}
-            <div className="relative">
-              <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
-              <input
-                type="text"
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                placeholder="State (e.g. Tamil Nadu)..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/10 bg-white/[0.02] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
+                leftIcon={<GraduationCap className="h-3.5 w-3.5 text-indigo-400" />}
+                onSearch={(q) => getCollegesAction(q, stateFilter, cityFilter)}
+                onSelect={(item) => setCollegeFilter(item.name)}
+                onClear={() => setCollegeFilter("")}
+                emptyMessage="No matching colleges found."
               />
             </div>
           </div>

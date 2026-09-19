@@ -9,7 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock } from "lucide-react";
+import {
+  getStatesAction,
+  getCitiesAction,
+  getCollegesAction,
+  addCustomCollegeAction,
+} from "@/app/(dashboard)/actions/reference-data";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock, Building, Plus, X } from "lucide-react";
 import { Github, Linkedin } from "@/components/ui/brand-icons";
 
 interface EditProfileFormProps {
@@ -35,9 +42,38 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   const [skills, setSkills] = React.useState(initialProfile.skills?.join(", ") || "");
   const [interests, setInterests] = React.useState(initialProfile.interests?.join(", ") || "");
 
+  // Custom college form state
+  const [showAddCollegeModal, setShowAddCollegeModal] = React.useState(false);
+  const [newCollegeName, setNewCollegeName] = React.useState("");
+  const [newCollegeCity, setNewCollegeCity] = React.useState("");
+  const [newCollegeState, setNewCollegeState] = React.useState("");
+  const [isAddingCollege, setIsAddingCollege] = React.useState(false);
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [savedSuccess, setSavedSuccess] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+
+  const handleAddCollege = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCollegeName.trim()) return;
+    setIsAddingCollege(true);
+    try {
+      const created = await addCustomCollegeAction(
+        newCollegeName.trim(),
+        newCollegeCity.trim() || city || undefined,
+        newCollegeState.trim() || state || undefined
+      );
+      if (created) {
+        setCollege(created.name);
+        setShowAddCollegeModal(false);
+        setNewCollegeName("");
+      }
+    } catch (err) {
+      console.error("Error adding custom college:", err);
+    } finally {
+      setIsAddingCollege(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -160,18 +196,88 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">
-                  College / University
-                </label>
-                <Input
+                <SearchableSelect
+                  label="College / University"
+                  placeholder="Type college name or acronym (e.g. PSG, CIT, Anna, IIT)..."
                   value={college}
-                  onChange={(e) => setCollege(e.target.value)}
-                  placeholder="e.g. PSG College of Technology, Coimbatore"
-                  leftIcon={<GraduationCap className="h-4 w-4" />}
+                  leftIcon={<GraduationCap className="h-4 w-4 text-primary" />}
+                  onSearch={(q) => getCollegesAction(q, state, city)}
+                  onSelect={(item) => setCollege(item.name)}
+                  onClear={() => setCollege("")}
+                  emptyMessage="No colleges found matching your search."
+                  customActionSlot={
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-xs text-muted-foreground font-mono">
+                        Can&apos;t find your college?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCollegeModal(true)}
+                        className="inline-flex items-center gap-1 text-xs font-mono text-primary hover:underline cursor-pointer"
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>Add College</span>
+                      </button>
+                    </div>
+                  }
                 />
               </div>
+
+              {/* Add Custom College Inline Section */}
+              {showAddCollegeModal && (
+                <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                      Add New College / University
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCollegeModal(false)}
+                      className="text-muted-foreground hover:text-foreground text-xs p-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <Input
+                    value={newCollegeName}
+                    onChange={(e) => setNewCollegeName(e.target.value)}
+                    placeholder="College / Institute Full Name *"
+                    required
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      value={newCollegeCity}
+                      onChange={(e) => setNewCollegeCity(e.target.value)}
+                      placeholder={`City (e.g. ${city || "Coimbatore"})`}
+                    />
+                    <Input
+                      value={newCollegeState}
+                      onChange={(e) => setNewCollegeState(e.target.value)}
+                      placeholder={`State (e.g. ${state || "Tamil Nadu"})`}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddCollegeModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddCollege}
+                      disabled={isAddingCollege || !newCollegeName.trim()}
+                    >
+                      {isAddingCollege ? "Adding..." : "Save and Select"}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -204,7 +310,7 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5 text-primary" />
-                  Location (City, State, Country)
+                  Location (State, City, Country)
                 </span>
                 <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
                   <input
@@ -218,21 +324,50 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="City (e.g. Coimbatore)"
-                />
-                <Input
+                <SearchableSelect
+                  label="State"
+                  placeholder="Search state..."
                   value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="State (e.g. Tamil Nadu)"
+                  leftIcon={<Building className="h-4 w-4 text-primary" />}
+                  onSearch={(q) => getStatesAction(q)}
+                  onSelect={(item) => {
+                    setState(item.name);
+                    setCity("");
+                  }}
+                  onClear={() => {
+                    setState("");
+                    setCity("");
+                  }}
+                  emptyMessage="No matching state found."
                 />
-                <Input
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  placeholder="Country (e.g. India)"
+
+                <SearchableSelect
+                  label="City"
+                  placeholder="Search city..."
+                  value={city}
+                  disabled={!state.trim()}
+                  disabledMessage="Select a state first"
+                  leftIcon={<MapPin className="h-4 w-4 text-primary" />}
+                  onSearch={(q) => getCitiesAction(state, q)}
+                  onSelect={(item) => setCity(item.name)}
+                  onClear={() => setCity("")}
+                  emptyMessage={
+                    state
+                      ? `No cities found for ${state}.`
+                      : "Select a state first."
+                  }
                 />
+
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                    Country
+                  </label>
+                  <Input
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="Country (e.g. India)"
+                  />
+                </div>
               </div>
             </div>
 

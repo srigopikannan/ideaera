@@ -3,7 +3,14 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Profile } from "@/types";
-import { completeOnboardingAction, addCustomCollegeAction } from "@/app/(dashboard)/actions/onboarding";
+import { completeOnboardingAction } from "@/app/(dashboard)/actions/onboarding";
+import {
+  getStatesAction,
+  getCitiesAction,
+  getCollegesAction,
+  addCustomCollegeAction,
+} from "@/app/(dashboard)/actions/reference-data";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   User,
   Sparkles,
@@ -158,12 +165,11 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
     try {
       const added = await addCustomCollegeAction(
         customCollegeName.trim(),
-        customCollegeCity.trim() || undefined,
-        customCollegeState.trim() || undefined
+        customCollegeCity.trim() || city || undefined,
+        customCollegeState.trim() || state || undefined
       );
       if (added) {
-        setCollegesList((prev) => [added, ...prev]);
-        setSelectedCollege(added);
+        setSelectedCollege(added.name);
         setShowCustomCollegeForm(false);
         setCustomCollegeName("");
       }
@@ -489,22 +495,32 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
           {currentStep === 5 && (
             <div className="space-y-6 animate-fade-in">
               {!showCustomCollegeForm ? (
-                <>
-                  <div>
-                    <label className="text-xs font-mono uppercase tracking-wider text-neutral-400 block mb-2">
-                      Search Your College or University
-                    </label>
-                    <div className="relative">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-                      <input
-                        type="text"
-                        value={collegeSearch}
-                        onChange={(e) => setCollegeSearch(e.target.value)}
-                        placeholder="Search by college name, city, or state..."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  <SearchableSelect
+                    label="Search Your College or University"
+                    placeholder="Type college name or acronym (e.g. PSG, CIT, Anna, IIT)..."
+                    value={selectedCollege}
+                    leftIcon={<GraduationCap className="h-4 w-4 text-indigo-400" />}
+                    onSearch={(q) => getCollegesAction(q, state, city)}
+                    onSelect={(item) => setSelectedCollege(item.name)}
+                    onClear={() => setSelectedCollege("")}
+                    emptyMessage="No colleges found matching your search."
+                    customActionSlot={
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-400 font-mono">
+                          Can&apos;t find your college?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomCollegeForm(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-xs font-mono text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add College</span>
+                        </button>
+                      </div>
+                    }
+                  />
 
                   {selectedCollege && (
                     <div className="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-between text-xs font-mono text-indigo-300">
@@ -521,36 +537,7 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                       </button>
                     </div>
                   )}
-
-                  <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1">
-                    {filteredColleges.map((colName) => (
-                      <button
-                        key={colName}
-                        type="button"
-                        onClick={() => setSelectedCollege(colName)}
-                        className={cn(
-                          "w-full p-2.5 rounded-xl text-left text-xs font-mono transition-colors flex items-center justify-between",
-                          selectedCollege === colName
-                            ? "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30"
-                            : "hover:bg-white/5 text-neutral-300"
-                        )}
-                      >
-                        <span className="truncate">{colName}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="pt-2 border-t border-white/[0.06]">
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomCollegeForm(true)}
-                      className="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition-colors inline-flex items-center gap-1.5"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Not listed? Add your college manually</span>
-                    </button>
-                  </div>
-                </>
+                </div>
               ) : (
                 <form onSubmit={handleCreateCollege} className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -578,14 +565,14 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                   <div className="grid grid-cols-2 gap-3">
                     <input
                       type="text"
-                      value={customCollegeCity}
+                      value={customCollegeCity || city}
                       onChange={(e) => setCustomCollegeCity(e.target.value)}
                       placeholder="City (e.g. Coimbatore)"
                       className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
                     />
                     <input
                       type="text"
-                      value={customCollegeState}
+                      value={customCollegeState || state}
                       onChange={(e) => setCustomCollegeState(e.target.value)}
                       placeholder="State (e.g. Tamil Nadu)"
                       className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
@@ -615,35 +602,42 @@ export function OnboardingWizard({ initialProfile, initialColleges }: Onboarding
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* State & Dependent City Autocomplete Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* State Searchable Select */}
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-neutral-500 block mb-1">City</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Coimbatore"
-                    className="w-full px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-400/50"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-mono uppercase text-neutral-500 block mb-1">State</label>
-                  <input
-                    type="text"
+                  <SearchableSelect
+                    label="Search your state"
+                    placeholder="Search state (e.g. Tamil Nadu)..."
                     value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    placeholder="e.g. Tamil Nadu"
-                    className="w-full px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-400/50"
+                    leftIcon={<Building className="h-4 w-4 text-cyan-400" />}
+                    onSearch={(q) => getStatesAction(q)}
+                    onSelect={(item) => {
+                      setState(item.name);
+                      // Reset city when state changes
+                      setCity("");
+                    }}
+                    onClear={() => {
+                      setState("");
+                      setCity("");
+                    }}
+                    emptyMessage="No matching state found."
                   />
                 </div>
+
+                {/* City Searchable Select — State Dependent */}
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-neutral-500 block mb-1">Country</label>
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    placeholder="e.g. India"
-                    className="w-full px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-400/50"
+                  <SearchableSelect
+                    label="Search your city"
+                    placeholder="Search city (e.g. Coimbatore)..."
+                    value={city}
+                    disabled={!state.trim()}
+                    disabledMessage="Select a state first"
+                    leftIcon={<MapPin className="h-4 w-4 text-cyan-400" />}
+                    onSearch={(q) => getCitiesAction(state, q)}
+                    onSelect={(item) => setCity(item.name)}
+                    onClear={() => setCity("")}
+                    emptyMessage={`No cities found in ${state || "selected state"}.`}
                   />
                 </div>
               </div>

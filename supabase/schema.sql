@@ -229,8 +229,8 @@ begin
     coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1) || '_' || substr(new.id::text, 1, 4)),
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/7.x/shapes/svg?seed=' || new.id::text),
-    coalesce(new.raw_user_meta_data->>'headline', 'Innovator & Creator on IdeaConnect'),
-    'Passionate about turning innovative concepts into impactful technology products.'
+    coalesce(new.raw_user_meta_data->>'headline', null),
+    coalesce(new.raw_user_meta_data->>'bio', null)
   )
   on conflict (id) do nothing;
   return new;

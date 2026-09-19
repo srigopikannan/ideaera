@@ -26,6 +26,21 @@ function formatProfile(p: any, viewerUserId?: string): Profile {
 
   const skills = skillsList.length > 0 ? skillsList : (p.skills || []);
 
+  // Filter out any obsolete generic boilerplate defaults
+  const isGenericHeadline = (h?: string | null) =>
+    !h ||
+    h.toLowerCase().includes("innovator & creator") ||
+    h.toLowerCase().includes("creator of ideaera") ||
+    h.toLowerCase().includes("creator on ideaera") ||
+    h.toLowerCase().includes("innovator profile on ideaera");
+
+  const isGenericBio = (b?: string | null) =>
+    !b ||
+    b.toLowerCase().includes("passionate about turning innovative concepts into impactful technology products");
+
+  const cleanHeadline = isGenericHeadline(p.headline) ? null : p.headline;
+  const cleanBio = isGenericBio(p.bio) ? null : p.bio;
+
   // Parse location and privacy
   let city = p.city || null;
   let state = p.state || null;
@@ -55,8 +70,13 @@ function formatProfile(p: any, viewerUserId?: string): Profile {
   const displayCountry = (isOwner || showLocation) ? country : null;
   const displayAge = (isOwner || showAge) && p.age ? Number(p.age) : null;
 
+  // College resolution (checks college column, availability column fallback, or raw)
+  const college = p.college || p.availability || null;
+
   return {
     ...p,
+    headline: cleanHeadline,
+    bio: cleanBio,
     website: p.portfolio_url || p.website || null,
     portfolio_url: p.portfolio_url || p.website || null,
     github_url: p.github_url || null,
@@ -66,11 +86,11 @@ function formatProfile(p: any, viewerUserId?: string): Profile {
     state: displayState,
     country: displayCountry,
     show_location: showLocation,
-    college: p.college || null,
+    college,
     age: displayAge,
     show_age: showAge,
     onboarding_completed: Boolean(
-      p.onboarding_completed ?? (p.headline && skills.length > 0)
+      p.onboarding_completed ?? (cleanHeadline && skills.length > 0)
     ),
     skills,
     interests: p.interests || [],
@@ -325,6 +345,10 @@ export async function updateProfile(
     updatePayload.location = locParts.join(", ");
   } else if (profileData.location !== undefined) {
     updatePayload.location = profileData.location;
+  }
+
+  if (profileData.college !== undefined) {
+    updatePayload.availability = profileData.college;
   }
 
   const websiteVal = profileData.portfolio_url || profileData.website;

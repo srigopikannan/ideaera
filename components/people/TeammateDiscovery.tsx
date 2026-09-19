@@ -431,26 +431,36 @@ export function TeammateDiscovery({
                     ) : null}
                   </div>
 
-                  {/* Headline */}
-                  {person.headline && (
-                    <p className="text-xs text-neutral-300 font-light line-clamp-2 leading-relaxed">
-                      {person.headline}
-                    </p>
-                  )}
+                  {/* Bio / Description */}
+                  <div className="min-h-[2.5rem] flex items-center">
+                    {person.bio ? (
+                      <p className="text-xs text-neutral-300 font-light line-clamp-2 leading-relaxed">
+                        {person.bio}
+                      </p>
+                    ) : person.headline ? (
+                      <p className="text-xs text-neutral-300 font-light line-clamp-2 leading-relaxed">
+                        {person.headline}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-mono text-neutral-500 italic">
+                        Bio not added yet
+                      </p>
+                    )}
+                  </div>
 
                   {/* Badges: College & Location */}
                   <div className="space-y-1.5 text-[11px] font-mono text-neutral-400">
                     {person.college && (
                       <div className="flex items-center gap-1.5 truncate text-neutral-300">
-                        <GraduationCap className="h-3 w-3 text-indigo-400 shrink-0" />
+                        <GraduationCap className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                         <span className="truncate">{person.college}</span>
                       </div>
                     )}
-                    {(person.city || person.location) && (
+                    {(person.city || person.state || person.location) && (
                       <div className="flex items-center gap-1.5 truncate text-neutral-400">
-                        <MapPin className="h-3 w-3 text-cyan-400 shrink-0" />
+                        <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
                         <span className="truncate">
-                          {person.city ? [person.city, person.state, person.country].filter(Boolean).join(", ") : person.location}
+                          {[person.city, person.state].filter(Boolean).join(", ") || person.location}
                         </span>
                       </div>
                     )}
@@ -472,6 +482,20 @@ export function TeammateDiscovery({
                           +{person.skills.length - 4} more
                         </span>
                       )}
+                    </div>
+                  )}
+
+                  {/* Interests Chips */}
+                  {person.interests && person.interests.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {person.interests.slice(0, 3).map((interest, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-full text-[9px] font-mono border border-purple-500/20 bg-purple-500/5 text-purple-300"
+                        >
+                          {interest}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>

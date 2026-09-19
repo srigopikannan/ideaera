@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   if (!profile) return { title: "Person Not Found — IdeaEra" };
   return {
     title: `${profile.full_name} (@${profile.username}) — IdeaEra`,
-    description: profile.headline || profile.bio || "Innovator on IdeaEra",
+    description: profile.headline || profile.bio || "IdeaEra Member",
   };
 }
 

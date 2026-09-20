@@ -8,7 +8,12 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from "@/services/social";
-import { sendMessage, getMessages } from "@/services/messaging";
+import {
+  sendMessage,
+  getMessages,
+  markMessagesDelivered,
+  markConversationAsRead,
+} from "@/services/messaging";
 import { revalidatePath } from "next/cache";
 
 export async function getNotificationsAction() {
@@ -54,6 +59,16 @@ export async function sendMessageAction(receiverId: string, content: string) {
 export async function getMessagesAction(userId: string) {
   const msgs = await getMessages(userId);
   return { success: true, messages: msgs };
+}
+
+export async function markMessagesDeliveredAction(messageIds?: string[]) {
+  const success = await markMessagesDelivered(messageIds);
+  return { success };
+}
+
+export async function markConversationReadAction(otherUserId: string) {
+  const success = await markConversationAsRead(otherUserId);
+  return { success };
 }
 
 export async function markNotificationReadAction(notificationId: string) {

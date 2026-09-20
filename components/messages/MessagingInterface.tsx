@@ -7,8 +7,18 @@ import { Conversation, Message, Profile } from "@/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { sendMessageAction, getMessagesAction } from "@/app/(dashboard)/actions/social";
-import { formatTimeAgo } from "@/lib/utils";
+import {
+  sendMessageAction,
+  getMessagesAction,
+  markMessagesDeliveredAction,
+  markConversationReadAction,
+} from "@/app/(dashboard)/actions/social";
+import {
+  formatMessageTime,
+  formatExactMessageDateTime,
+  cn,
+} from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import {
   Send,
   Search,
@@ -19,8 +29,8 @@ import {
   Users,
   MapPin,
   Loader2,
+  Clock,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface MessagingInterfaceProps {
   conversations: Conversation[];
@@ -72,12 +82,27 @@ export function MessagingInterface({
   const [inputContent, setInputContent] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = React.useState(false);
+  const [activeInfoMessageId, setActiveInfoMessageId] = React.useState<string | null>(null);
 
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const selectedUserIdRef = React.useRef(selectedUserId);
+
+  React.useEffect(() => {
+    selectedUserIdRef.current = selectedUserId;
+  }, [selectedUserId]);
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Close info popover when clicking anywhere else
+  React.useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveInfoMessageId(null);
+    };
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   // Keep selected user updated if activeUserId/activeUser props change
   React.useEffect(() => {
@@ -90,6 +115,135 @@ export function MessagingInterface({
       if (user) setSelectedUser(user);
     }
   }, [activeUserId, activeUser, conversationList, people]);
+
+  // When selected user is active or changes, acknowledge read for this conversation
+  React.useEffect(() => {
+    if (selectedUserId && currentUserId) {
+      markConversationReadAction(selectedUserId).catch((err) =>
+        console.error("Failed to mark conversation as read:", err)
+      );
+      setConversationList((prev) =>
+        prev.map((c) =>
+          c.other_user.id === selectedUserId ? { ...c, unread_count: 0 } : c
+        )
+      );
+    }
+  }, [selectedUserId, currentUserId]);
+
+  // Realtime subscription for incoming messages & status updates (delivery, read)
+  React.useEffect(() => {
+    if (!currentUserId) return;
+    const supabase = createClient();
+
+    // Acknowledge delivery of any pending messages sent to current user
+    markMessagesDeliveredAction().catch((err) =>
+      console.error("Failed to acknowledge pending message delivery:", err)
+    );
+
+    const channel = supabase
+      .channel(`messages_realtime_${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          if (!newMsg || !newMsg.id) return;
+
+          if (payload.eventType === "INSERT") {
+            const isReceiver = newMsg.receiver_id === currentUserId;
+            const isSender = newMsg.sender_id === currentUserId;
+            const currentSelected = selectedUserIdRef.current;
+
+            if (isReceiver) {
+              // Automatically acknowledge delivery
+              markMessagesDeliveredAction([newMsg.id]).catch(console.error);
+
+              if (currentSelected === newMsg.sender_id) {
+                // Thread is currently open, immediately mark as read
+                markConversationReadAction(newMsg.sender_id).catch(console.error);
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === newMsg.id)) return prev;
+                  return [...prev, newMsg];
+                });
+              }
+            } else if (isSender && currentSelected === newMsg.receiver_id) {
+              // Message sent by me (confirmed or multi-tab echo)
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) {
+                  return prev.map((m) => (m.id === newMsg.id ? newMsg : m));
+                }
+                const tempIndex = prev.findIndex(
+                  (m) => m.id.startsWith("temp_") && m.content === newMsg.content
+                );
+                if (tempIndex !== -1) {
+                  const next = [...prev];
+                  next[tempIndex] = newMsg;
+                  return next;
+                }
+                return [...prev, newMsg];
+              });
+            }
+
+            // Update conversation list last message and unread count
+            const partnerId = isSender ? newMsg.receiver_id : newMsg.sender_id;
+            setConversationList((prev) => {
+              const exists = prev.some((c) => c.other_user.id === partnerId);
+              const isCurrentThread = currentSelected === partnerId;
+              const shouldIncrement = isReceiver && !isCurrentThread;
+
+              if (exists) {
+                return prev.map((c) => {
+                  if (c.other_user.id === partnerId) {
+                    return {
+                      ...c,
+                      last_message: newMsg,
+                      unread_count: shouldIncrement ? c.unread_count + 1 : c.unread_count,
+                    };
+                  }
+                  return c;
+                });
+              } else {
+                const partnerProfile = people.find((p) => p.id === partnerId);
+                if (partnerProfile) {
+                  return [
+                    {
+                      other_user: partnerProfile,
+                      last_message: newMsg,
+                      unread_count: shouldIncrement ? 1 : 0,
+                    },
+                    ...prev,
+                  ];
+                }
+              }
+              return prev;
+            });
+          } else if (payload.eventType === "UPDATE") {
+            // Live update of message delivery / seen status
+            setMessages((prev) =>
+              prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
+            );
+
+            // Update conversation list last message if it matches
+            setConversationList((prev) =>
+              prev.map((c) =>
+                c.last_message?.id === newMsg.id
+                  ? { ...c, last_message: { ...c.last_message, ...newMsg } }
+                  : c
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, people]);
 
   // Filtered conversations
   const filteredConversations = React.useMemo(() => {
@@ -125,6 +279,16 @@ export function MessagingInterface({
     setSelectedUser(user);
     window.history.pushState(null, "", `/messages/${user.id}`);
 
+    // Mark unread messages in this conversation as read
+    markConversationReadAction(user.id).catch((err) =>
+      console.error("Failed to mark conversation as read:", err)
+    );
+
+    // Reset unread count in conversation list
+    setConversationList((prev) =>
+      prev.map((c) => (c.other_user.id === user.id ? { ...c, unread_count: 0 } : c))
+    );
+
     // Check if conversation already exists in conversations
     const existingConv = conversationList.find((c) => c.other_user.id === user.id);
     if (!existingConv) {
@@ -159,6 +323,8 @@ export function MessagingInterface({
       receiver_id: selectedUserId,
       content,
       created_at: new Date().toISOString(),
+      delivered_at: null,
+      read_at: null,
       is_read: false,
     };
 
@@ -273,6 +439,10 @@ export function MessagingInterface({
             filteredConversations.length > 0 ? (
               filteredConversations.map((conv) => {
                 const isSelected = conv.other_user.id === selectedUserId;
+                const isMe = conv.last_message?.sender_id === currentUserId;
+                const isRead = Boolean(conv.last_message?.read_at || conv.last_message?.is_read);
+                const isDelivered = Boolean(conv.last_message?.delivered_at);
+
                 return (
                   <button
                     key={conv.other_user.id}
@@ -294,18 +464,31 @@ export function MessagingInterface({
                         <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
                           {conv.other_user.full_name}
                         </p>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {formatTimeAgo(conv.last_message.created_at)}
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                          {formatMessageTime(conv.last_message?.created_at)}
                         </span>
                       </div>
 
-                      <p className="text-xs text-muted-foreground truncate line-clamp-1">
-                        {conv.last_message.content}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {isMe && (
+                          <span className="shrink-0">
+                            {isRead ? (
+                              <CheckCheck className="h-3.5 w-3.5 text-cyan-400 stroke-[2.2]" />
+                            ) : isDelivered ? (
+                              <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/80 stroke-[2]" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 text-muted-foreground/80 stroke-[2]" />
+                            )}
+                          </span>
+                        )}
+                        <p className="truncate line-clamp-1 flex-1">
+                          {conv.last_message?.content}
+                        </p>
+                      </div>
                     </div>
 
                     {conv.unread_count > 0 && (
-                      <span className="flex-shrink-0 h-4 min-w-4 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center px-1">
+                      <span className="flex-shrink-0 h-4 min-w-4 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center px-1 ml-1">
                         {conv.unread_count}
                       </span>
                     )}
@@ -524,7 +707,20 @@ export function MessagingInterface({
               ) : (
                 messages.map((msg) => {
                   const isMe = msg.sender_id === currentUserId;
-                  const isRead = Boolean(msg.is_read || msg.read_at);
+                  const isRead = Boolean(msg.read_at || msg.is_read);
+                  const isDelivered = Boolean(msg.delivered_at);
+                  const isTemp = msg.id.startsWith("temp_");
+
+                  const tooltipTitle = isMe
+                    ? isRead
+                      ? `Seen at: ${formatExactMessageDateTime(msg.read_at)}`
+                      : isDelivered
+                      ? `Delivered at: ${formatExactMessageDateTime(msg.delivered_at)}`
+                      : isTemp
+                      ? "Sending..."
+                      : `Sent at: ${formatExactMessageDateTime(msg.created_at)}`
+                    : `Sent at: ${formatExactMessageDateTime(msg.created_at)}`;
+
                   return (
                     <div
                       key={msg.id}
@@ -544,16 +740,102 @@ export function MessagingInterface({
                         {msg.content}
                       </div>
 
-                      <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                        <span>{formatTimeAgo(msg.created_at)}</span>
-                        {isMe && (
-                          <span>
-                            {isRead ? (
-                              <CheckCheck className="h-3 w-3 text-primary" />
-                            ) : (
-                              <Check className="h-3 w-3" />
+                      {/* Message Footer: Timestamp & Ticks */}
+                      <div className="relative flex items-center gap-1 mt-1 text-[10px] text-muted-foreground select-none group/status">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveInfoMessageId(
+                              activeInfoMessageId === msg.id ? null : msg.id
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer py-0.5"
+                          title={tooltipTitle}
+                        >
+                          <span>{formatMessageTime(msg.created_at)}</span>
+
+                          {isMe && (
+                            <span className="inline-flex items-center ml-0.5">
+                              {isRead ? (
+                                <CheckCheck className="h-3.5 w-3.5 text-cyan-400 stroke-[2.4]" />
+                              ) : isDelivered ? (
+                                <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/80 stroke-[2.2]" />
+                              ) : isTemp ? (
+                                <Clock className="h-3 w-3 text-muted-foreground/60 animate-pulse" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5 text-muted-foreground/80 stroke-[2.2]" />
+                              )}
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Interactive Info Popover (Sent, Delivered, Seen) */}
+                        {activeInfoMessageId === msg.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              "absolute bottom-full mb-1.5 z-40 p-3 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-2xl text-left min-w-[220px] max-w-[280px] space-y-2 animate-in fade-in zoom-in-95 duration-150",
+                              isMe ? "right-0 origin-bottom-right" : "left-0 origin-bottom-left"
                             )}
-                          </span>
+                          >
+                            <div className="flex items-center justify-between pb-1.5 border-b border-border/60 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                              <span>Message Details</span>
+                              {isMe && (
+                                <span
+                                  className={cn(
+                                    "px-1.5 py-0.5 rounded text-[9px] font-bold",
+                                    isRead
+                                      ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
+                                      : isDelivered
+                                      ? "bg-muted text-muted-foreground"
+                                      : isTemp
+                                      ? "bg-amber-500/15 text-amber-400"
+                                      : "bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {isRead
+                                    ? "Seen"
+                                    : isDelivered
+                                    ? "Delivered"
+                                    : isTemp
+                                    ? "Sending..."
+                                    : "Sent"}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-1.5 text-[11px]">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-muted-foreground shrink-0">Sent:</span>
+                                <span className="font-medium text-foreground text-right">
+                                  {formatExactMessageDateTime(msg.created_at)}
+                                </span>
+                              </div>
+
+                              {isMe && (
+                                <>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-muted-foreground shrink-0">Delivered:</span>
+                                    <span className="font-medium text-foreground text-right">
+                                      {msg.delivered_at
+                                        ? formatExactMessageDateTime(msg.delivered_at)
+                                        : "Pending delivery"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-muted-foreground shrink-0">Seen:</span>
+                                    <span className="font-medium text-foreground text-right">
+                                      {msg.read_at
+                                        ? formatExactMessageDateTime(msg.read_at)
+                                        : "Not seen yet"}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

@@ -173,8 +173,10 @@ export interface Message {
   receiver?: Profile;
   content: string;
   created_at: string;
+  delivered_at?: string | null;
   read_at?: string | null;
   is_read?: boolean;
+  conversation_id?: string | null;
 }
 
 export interface Conversation {

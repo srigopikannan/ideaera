@@ -33,7 +33,7 @@ export async function getConversations(): Promise<Conversation[]> {
           if (!rawPartner || isDeletedProfile(rawPartner)) continue;
 
           const partner: Profile = formatProfile(rawPartner, user.id);
-          const isUnread = !isSender && !msg.is_read && !msg.read_at;
+          const isUnread = !isSender && !msg.read_at && !msg.is_read;
 
           if (!convMap.has(partner.id)) {
             convMap.set(partner.id, {
@@ -75,17 +75,21 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
         .order("created_at", { ascending: true });
 
       if (data && !error) {
-        // Mark unread messages sent to current user as read
+        // Mark unread messages sent to current user as read and delivered
         const nowIso = new Date().toISOString();
         try {
           await supabase
             .from("messages")
-            .update({ is_read: true, read_at: nowIso })
+            .update({
+              is_read: true,
+              read_at: nowIso,
+              delivered_at: nowIso,
+            })
             .eq("sender_id", otherUserId)
             .eq("receiver_id", user.id)
-            .or("is_read.eq.false,is_read.is.null,read_at.is.null");
+            .is("read_at", null);
         } catch (markErr) {
-          console.error("Error marking messages as read:", markErr);
+          console.error("Error marking messages as read in getMessages:", markErr);
         }
 
         return data;
@@ -112,13 +116,18 @@ export async function sendMessage(receiverId: string, content: string): Promise<
     throw new Error("You cannot send a message to yourself.");
   }
 
+  const conversationId = [user.id, receiverId].sort().join(":");
+
   const { data: inserted, error } = await supabase
     .from("messages")
     .insert({
       sender_id: user.id,
       receiver_id: receiverId,
       content,
+      conversation_id: conversationId,
       is_read: false,
+      delivered_at: null,
+      read_at: null,
     })
     .select(
       "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
@@ -152,6 +161,60 @@ export async function sendMessage(receiverId: string, content: string): Promise<
   }
 
   return inserted;
+}
+
+export async function markMessagesDelivered(messageIds?: string[]): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const nowIso = new Date().toISOString();
+    let query = supabase
+      .from("messages")
+      .update({ delivered_at: nowIso })
+      .eq("receiver_id", user.id)
+      .is("delivered_at", null);
+
+    if (messageIds && messageIds.length > 0) {
+      query = query.in("id", messageIds);
+    }
+
+    const { error } = await query;
+    return !error;
+  } catch (err) {
+    console.error("Error in markMessagesDelivered:", err);
+    return false;
+  }
+}
+
+export async function markConversationAsRead(otherUserId: string): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        is_read: true,
+        read_at: nowIso,
+        delivered_at: nowIso,
+      })
+      .eq("sender_id", otherUserId)
+      .eq("receiver_id", user.id)
+      .is("read_at", null);
+
+    return !error;
+  } catch (err) {
+    console.error("Error in markConversationAsRead:", err);
+    return false;
+  }
 }
 
 export async function getAllMessageableUsers(currentUserId?: string): Promise<Profile[]> {

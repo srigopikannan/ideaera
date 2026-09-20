@@ -198,6 +198,73 @@ export function formatTimeAgo(dateString: string): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+export function formatMessageTime(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "";
+
+  const now = new Date();
+
+  // Check today, yesterday, this year using user's local calendar dates
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    d.getDate() === yesterday.getDate() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getFullYear() === yesterday.getFullYear();
+
+  const isThisYear = d.getFullYear() === now.getFullYear();
+
+  const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const timeStr = timeFormatter.format(d);
+
+  if (isToday) {
+    return timeStr;
+  }
+  if (isYesterday) {
+    return `Yesterday, ${timeStr}`;
+  }
+  if (isThisYear) {
+    const dayMonthFormatter = new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "short",
+    });
+    return `${dayMonthFormatter.format(d)}, ${timeStr}`;
+  }
+
+  const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `${fullDateFormatter.format(d)}, ${timeStr}`;
+}
+
+export function formatExactMessageDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return "--";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "--";
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
 export function getInitials(name: string): string {
   if (!name) return "IC";
   const parts = name.trim().split(/\s+/);

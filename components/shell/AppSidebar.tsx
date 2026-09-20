@@ -14,6 +14,7 @@ import {
   Zap,
   UserCheck,
   MessageSquare,
+  Bell,
   User,
   Settings,
   LayoutDashboard,
@@ -38,6 +39,7 @@ const workspaceNav: NavItem[] = [
   { name: "Projects", href: "/projects", icon: FolderGit2 },
   { name: "Match", href: "/match", icon: Zap },
   { name: "Connections", href: "/connections", icon: UserCheck },
+  { name: "Notifications", href: "/notifications", icon: Bell },
   { name: "Messages", href: "/messages", icon: MessageSquare },
   { name: "Companies", href: "/companies", icon: Building2 },
 ];

@@ -36,7 +36,10 @@ export async function getConnections(): Promise<{
   };
 }
 
-export async function sendConnectionRequest(targetUserId: string): Promise<Connection> {
+export async function sendConnectionRequest(
+  targetUserId: string,
+  connectionType: "public" | "private" = "private"
+): Promise<Connection> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -48,6 +51,27 @@ export async function sendConnectionRequest(targetUserId: string): Promise<Conne
     throw new Error("You cannot send a connection request to yourself.");
   }
 
+  // Validate User B exists
+  const { data: targetProfile, error: targetErr } = await supabase
+    .from("profiles")
+    .select("id, full_name, username")
+    .eq("id", targetUserId)
+    .maybeSingle();
+
+  if (targetErr || !targetProfile) {
+    throw new Error("Target user profile does not exist.");
+  }
+
+  console.log(`[CONNECTION] sender: ${user.id}, receiver: ${targetUserId}, type: ${connectionType}`);
+
+  // Fetch sender profile for notification message
+  const { data: senderProfile } = await supabase
+    .from("profiles")
+    .select("full_name, username")
+    .eq("id", user.id)
+    .maybeSingle();
+  const senderName = senderProfile?.full_name || "An innovator";
+
   // Check if an existing connection exists between the two users in either direction
   const { data: existing } = await supabase
     .from("connections")
@@ -56,7 +80,7 @@ export async function sendConnectionRequest(targetUserId: string): Promise<Conne
     .maybeSingle();
 
   if (existing) {
-    // If already accepted, return existing connection
+    // If already accepted, return existing connection (no duplicate)
     if (existing.status === "accepted") {
       return existing;
     }
@@ -71,35 +95,42 @@ export async function sendConnectionRequest(targetUserId: string): Promise<Conne
         .single();
 
       if (!acceptErr && accepted) {
-        try {
-          const { data: myProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-          const myName = myProfile?.full_name || "An innovator";
-          await supabase.from("notifications").insert({
-            user_id: existing.requester_id,
-            type: "connection_accepted",
-            title: "Connection Accepted",
-            message: `${myName} accepted your connection signal.`,
-            entity_id: user.id,
-            is_read: false,
-          });
-        } catch {}
+        console.log(`[NOTIFICATION] recipient: ${existing.requester_id}, actor: ${user.id}, connection: ${accepted.id}`);
+        const { error: notifErr } = await supabase.from("notifications").insert({
+          recipient_id: existing.requester_id,
+          user_id: existing.requester_id,
+          actor_id: user.id,
+          connection_id: accepted.id,
+          entity_id: accepted.id,
+          type: "connection_accepted",
+          title: "Connection Accepted",
+          message: `${senderName} accepted your connection request.`,
+          read: false,
+          is_read: false,
+        });
+        if (notifErr) {
+          console.error("[NOTIFICATION ERROR]", notifErr);
+        }
         return accepted;
       }
     }
 
-    // If pending and user already sent it to target, return existing
+    // If pending and user already sent it to target, return existing (no duplicate)
     if (existing.status === "pending" && existing.requester_id === user.id) {
       return existing;
     }
 
     // If rejected, allow re-requesting
     if (existing.status === "rejected") {
+      const isPublic = connectionType === "public";
+      const newStatus = isPublic ? "accepted" : "pending";
       const { data: renewed, error: renewErr } = await supabase
         .from("connections")
         .update({
           requester_id: user.id,
           receiver_id: targetUserId,
-          status: "pending",
+          status: newStatus,
+          connection_type: connectionType,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id)
@@ -107,40 +138,80 @@ export async function sendConnectionRequest(targetUserId: string): Promise<Conne
         .single();
 
       if (!renewErr && renewed) {
+        const notifType = isPublic ? "connection_accepted" : "connection_request";
+        const notifTitle = isPublic ? "New Connection" : "Connection Request";
+        const notifMessage = isPublic
+          ? `${senderName} connected with you.`
+          : `${senderName} sent you a connection request.`;
+
+        console.log(`[NOTIFICATION] recipient: ${targetUserId}, actor: ${user.id}, connection: ${renewed.id}`);
+        const { error: notifErr } = await supabase.from("notifications").insert({
+          recipient_id: targetUserId,
+          user_id: targetUserId,
+          actor_id: user.id,
+          connection_id: renewed.id,
+          entity_id: renewed.id,
+          type: notifType,
+          title: notifTitle,
+          message: notifMessage,
+          read: false,
+          is_read: false,
+        });
+        if (notifErr) {
+          console.error("[NOTIFICATION ERROR]", notifErr);
+        }
         return renewed;
       }
     }
   }
 
-  // Insert new pending request
-  const { data: inserted, error } = await supabase
+  // Insert new connection
+  const isPublic = connectionType === "public";
+  const initialStatus = isPublic ? "accepted" : "pending";
+
+  const { data: inserted, error: connError } = await supabase
     .from("connections")
     .insert({
       requester_id: user.id,
       receiver_id: targetUserId,
-      status: "pending",
+      status: initialStatus,
+      connection_type: connectionType,
     })
     .select("*, requester:profiles!requester_id(*), receiver:profiles!receiver_id(*)")
     .single();
 
-  if (error || !inserted) {
-    throw new Error(error?.message || "Failed to send connection request.");
+  if (connError || !inserted) {
+    console.error("[CONNECTION ERROR]", connError);
+    throw new Error(connError?.message || "Failed to send connection request.");
   }
 
-  // Notify recipient
-  try {
-    const { data: myProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-    const myName = myProfile?.full_name || "An innovator";
-    await supabase.from("notifications").insert({
-      user_id: targetUserId,
-      type: "connection_request",
-      title: "Connection Request",
-      message: `${myName} initiated a connection signal with you.`,
-      entity_id: user.id,
-      is_read: false,
-    });
-  } catch (notifErr) {
-    console.error("Error creating connection notification:", notifErr);
+  console.log(`[CONNECTION SUCCESS] id: ${inserted.id}, requester: ${user.id}, receiver: ${targetUserId}, status: ${initialStatus}`);
+
+  // Create notification server-side for receiver
+  const notifType = isPublic ? "connection_accepted" : "connection_request";
+  const notifTitle = isPublic ? "New Connection" : "Connection Request";
+  const notifMessage = isPublic
+    ? `${senderName} connected with you.`
+    : `${senderName} sent you a connection request.`;
+
+  console.log(`[NOTIFICATION] recipient: ${targetUserId}, actor: ${user.id}, connection: ${inserted.id}`);
+  const { error: notifErr } = await supabase.from("notifications").insert({
+    recipient_id: targetUserId,
+    user_id: targetUserId,
+    actor_id: user.id,
+    connection_id: inserted.id,
+    entity_id: inserted.id,
+    type: notifType,
+    title: notifTitle,
+    message: notifMessage,
+    read: false,
+    is_read: false,
+  });
+
+  if (notifErr) {
+    console.error("[NOTIFICATION ERROR]", notifErr);
+  } else {
+    console.log(`[NOTIFICATION SUCCESS] created notification for receiver ${targetUserId}`);
   }
 
   return inserted;
@@ -189,15 +260,25 @@ export async function updateConnectionStatus(connectionId: string, status: "acce
     try {
       const { data: myProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
       const myName = myProfile?.full_name || "An innovator";
-      await supabase.from("notifications").insert({
+      console.log(`[NOTIFICATION] recipient: ${connection.requester_id}, actor: ${user.id}, connection: ${connectionId}`);
+      const { error: notifErr } = await supabase.from("notifications").insert({
+        recipient_id: connection.requester_id,
         user_id: connection.requester_id,
+        actor_id: user.id,
+        connection_id: connection.id,
+        entity_id: connection.id,
         type: "connection_accepted",
         title: "Connection Accepted",
-        message: `${myName} accepted your connection signal.`,
-        entity_id: user.id,
+        message: `${myName} accepted your connection request.`,
+        read: false,
         is_read: false,
       });
-    } catch {}
+      if (notifErr) {
+        console.error("[NOTIFICATION ERROR]", notifErr);
+      }
+    } catch (err) {
+      console.error("[NOTIFICATION ERROR]", err);
+    }
   }
 }
 
@@ -249,22 +330,32 @@ export async function getNotifications(): Promise<Notification[]> {
     if (user) {
       const { data, error } = await supabase
         .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
+        .select("*, actor:profiles!actor_id(id, full_name, username, avatar_url, headline)")
+        .or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
 
-      if (data && !error) {
-        return data.map((r: any) => ({
-          id: r.id,
-          user_id: r.user_id,
-          type: r.type,
-          title: r.title || formatNotificationTitle(r.type),
-          message: r.message,
-          related_id: r.entity_id || r.related_id || null,
-          read: Boolean(r.is_read ?? r.read),
-          created_at: r.created_at,
-        }));
+      if (error) {
+        console.error("[NOTIFICATION QUERY ERROR]", error);
+        return [];
       }
+
+      console.log(`[NOTIFICATION QUERY] Found ${data?.length || 0} notifications for user ${user.id}`);
+
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        user_id: r.recipient_id || r.user_id,
+        recipient_id: r.recipient_id || r.user_id,
+        actor_id: r.actor_id || null,
+        actor: r.actor || undefined,
+        connection_id: r.connection_id || r.entity_id || r.related_id || null,
+        type: r.type,
+        title: r.title || formatNotificationTitle(r.type),
+        message: r.message,
+        related_id: r.connection_id || r.entity_id || r.related_id || null,
+        read: Boolean(r.read ?? r.is_read),
+        is_read: Boolean(r.is_read ?? r.read),
+        created_at: r.created_at,
+      }));
     }
   } catch (err) {
     console.error("Error in getNotifications:", err);
@@ -276,7 +367,7 @@ export async function getNotifications(): Promise<Notification[]> {
 export async function markNotificationAsRead(id: string): Promise<void> {
   try {
     const supabase = await createClient();
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    await supabase.from("notifications").update({ is_read: true, read: true }).eq("id", id);
   } catch (err) {
     console.error("Error in markNotificationAsRead:", err);
   }
@@ -287,7 +378,10 @@ export async function markAllNotificationsAsRead(): Promise<void> {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id);
+      await supabase
+        .from("notifications")
+        .update({ is_read: true, read: true })
+        .or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`);
     }
   } catch (err) {
     console.error("Error in markAllNotificationsAsRead:", err);

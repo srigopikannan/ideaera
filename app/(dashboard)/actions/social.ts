@@ -15,11 +15,12 @@ export async function getNotificationsAction() {
   return await getNotifications();
 }
 
-export async function requestConnectionAction(targetUserId: string) {
-  const result = await sendConnectionRequest(targetUserId);
+export async function requestConnectionAction(targetUserId: string, connectionType: "public" | "private" = "private") {
+  const result = await sendConnectionRequest(targetUserId, connectionType);
   revalidatePath("/people");
   revalidatePath("/connections");
   revalidatePath("/match");
+  revalidatePath("/notifications");
   return { success: true, connection: result };
 }
 
@@ -27,6 +28,8 @@ export async function updateConnectionAction(connectionId: string, status: "acce
   await updateConnectionStatus(connectionId, status);
   revalidatePath("/connections");
   revalidatePath("/people");
+  revalidatePath("/notifications");
+  revalidatePath("/messages");
   return { success: true };
 }
 

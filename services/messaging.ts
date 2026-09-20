@@ -73,6 +73,20 @@ export async function sendMessage(receiverId: string, content: string): Promise<
     throw new Error("You must be logged in to send a message.");
   }
 
+  // Verify accepted connection exists between the two users
+  const { data: conn } = await supabase
+    .from("connections")
+    .select("id, status")
+    .or(
+      `and(requester_id.eq.${user.id},receiver_id.eq.${receiverId}),and(requester_id.eq.${receiverId},receiver_id.eq.${user.id})`
+    )
+    .eq("status", "accepted")
+    .maybeSingle();
+
+  if (!conn) {
+    throw new Error("You can only message users you are connected with.");
+  }
+
   const { data: inserted, error } = await supabase
     .from("messages")
     .insert({
@@ -85,6 +99,28 @@ export async function sendMessage(receiverId: string, content: string): Promise<
 
   if (error || !inserted) {
     throw new Error(error?.message || "Failed to send message.");
+  }
+
+  // Create message notification for receiver
+  try {
+    const { data: senderProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const senderName = senderProfile?.full_name || "A collaborator";
+    await supabase.from("notifications").insert({
+      recipient_id: receiverId,
+      user_id: receiverId,
+      actor_id: user.id,
+      type: "message",
+      title: "New Message",
+      message: `${senderName}: "${content.slice(0, 60)}${content.length > 60 ? "..." : ""}"`,
+      read: false,
+      is_read: false,
+    });
+  } catch (notifErr) {
+    console.error("Error creating message notification:", notifErr);
   }
 
   return inserted;

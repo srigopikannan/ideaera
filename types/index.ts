@@ -157,6 +157,7 @@ export interface Connection {
   id: string;
   requester_id: string;
   receiver_id: string;
+  connection_type?: 'public' | 'private';
   requester?: Profile;
   receiver?: Profile;
   status: 'pending' | 'accepted' | 'rejected';
@@ -184,11 +185,16 @@ export interface Conversation {
 export interface Notification {
   id: string;
   user_id: string;
+  recipient_id?: string;
+  actor_id?: string | null;
+  actor?: Profile;
+  connection_id?: string | null;
   type: 'connection_request' | 'connection_accepted' | 'message' | 'idea_like' | 'idea_comment' | 'project_invite' | 'project_joined';
   title: string;
   message: string;
   related_id?: string | null;
   read: boolean;
+  is_read?: boolean;
   created_at: string;
 }
 

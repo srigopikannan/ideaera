@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Connection } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 import {
   updateConnectionAction,
   removeConnectionAction,
@@ -35,10 +37,40 @@ export function ConnectionsManager({
   initialSent,
   currentUserId,
 }: ConnectionsManagerProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = React.useState<"all" | "incoming" | "sent">("all");
   const [allConnections, setAllConnections] = React.useState<Connection[]>(initialAll);
   const [incomingRequests, setIncomingRequests] = React.useState<Connection[]>(initialIncoming);
   const [sentRequests, setSentRequests] = React.useState<Connection[]>(initialSent);
+
+  React.useEffect(() => {
+    setAllConnections(initialAll);
+    setIncomingRequests(initialIncoming);
+    setSentRequests(initialSent);
+  }, [initialAll, initialIncoming, initialSent]);
+
+  React.useEffect(() => {
+    if (!currentUserId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`connections_manager_${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, router]);
 
   const handleAccept = async (id: string) => {
     const conn = incomingRequests.find((c) => c.id === id);

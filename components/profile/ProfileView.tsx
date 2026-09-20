@@ -65,17 +65,17 @@ export function ProfileView({
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
-  const handleConnect = async () => {
+  const handleConnect = async (type: "public" | "private" = "private") => {
     setIsConnecting(true);
     try {
-      const res = await requestConnectionAction(profile.id);
+      const res = await requestConnectionAction(profile.id, type);
       if (res?.connection?.status === "accepted") {
         setConnectionStatus("connected");
       } else {
         setConnectionStatus("pending_sent");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Connection request error:", err);
     } finally {
       setIsConnecting(false);
     }
@@ -235,18 +235,35 @@ export function ProfileView({
             ) : (
               <>
                 {connectionStatus === "connected" ? (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-mono uppercase tracking-wider">
-                    <UserCheck className="h-3.5 w-3.5" />
-                    <span>Connected</span>
-                  </div>
+                  <>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-mono uppercase tracking-wider">
+                      <UserCheck className="h-3.5 w-3.5" />
+                      <span>Connected</span>
+                    </div>
+                    <Link
+                      href={`/messages?user=${profile.username}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-neutral-200 hover:text-white hover:border-white/30 transition-colors"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span>Message</span>
+                    </Link>
+                  </>
                 ) : connectionStatus === "pending_sent" ? (
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-mono uppercase tracking-wider">
                     <Clock className="h-3.5 w-3.5" />
                     <span>Request Pending</span>
                   </div>
+                ) : connectionStatus === "pending_received" ? (
+                  <Link
+                    href="/connections"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-mono uppercase tracking-wider hover:bg-cyan-500/20 transition-colors"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    <span>Respond to Request</span>
+                  </Link>
                 ) : (
                   <button
-                    onClick={handleConnect}
+                    onClick={() => handleConnect("private")}
                     disabled={isConnecting}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-neutral-200 transition-all shadow-lg disabled:opacity-50"
                   >
@@ -254,14 +271,6 @@ export function ProfileView({
                     <span>{isConnecting ? "Connecting..." : "Connect"}</span>
                   </button>
                 )}
-
-                <Link
-                  href={`/messages?user=${profile.username}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-neutral-200 hover:text-white hover:border-white/30 transition-colors"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Message</span>
-                </Link>
               </>
             )}
 

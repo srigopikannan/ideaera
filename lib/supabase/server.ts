@@ -25,9 +25,18 @@ export async function createClient() {
       },
       setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options as any)
-          );
+          const isRemember = cookieStore.get("sb-remember")?.value !== "false";
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const cookieOptions: any = { ...options };
+            if (!isRemember && value) {
+              delete cookieOptions.maxAge;
+              delete cookieOptions.expires;
+            } else if (isRemember && value && !cookieOptions.maxAge) {
+              cookieOptions.maxAge = 60 * 60 * 24 * 365;
+            }
+            cookieStore.set(name, value, cookieOptions);
+          });
         } catch {
           // The `setAll` method was called from a Server Component.
           // This can be ignored if you have proxy/middleware refreshing user sessions.

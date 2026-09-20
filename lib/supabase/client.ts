@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { parse, serialize } from "cookie";
 
 const REAL_SUPABASE_URL = "https://jhmnemzgbcwcryzolzbz.supabase.co";
 const REAL_SUPABASE_ANON_KEY = "sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD";
@@ -13,5 +14,33 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     REAL_SUPABASE_ANON_KEY;
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        if (typeof document === "undefined") return [];
+        const parsed = parse(document.cookie);
+        return Object.keys(parsed).map((name) => ({
+          name,
+          value: parsed[name] ?? "",
+        }));
+      },
+      setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
+        if (typeof document === "undefined") return;
+        const parsed = parse(document.cookie);
+        // If sb-remember is explicitly 'false', keep cookies as session cookies (clear on browser close)
+        const isRemember = parsed["sb-remember"] !== "false";
+
+        cookiesToSet.forEach(({ name, value, options }) => {
+          const cookieOptions: any = { ...options };
+          if (!isRemember && value) {
+            delete cookieOptions.maxAge;
+            delete cookieOptions.expires;
+          } else if (isRemember && value && !cookieOptions.maxAge) {
+            cookieOptions.maxAge = 60 * 60 * 24 * 365; // 1 year
+          }
+          document.cookie = serialize(name, value, cookieOptions);
+        });
+      },
+    },
+  });
 }

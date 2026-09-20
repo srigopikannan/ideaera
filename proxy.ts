@@ -27,15 +27,24 @@ export default async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
+          const isRemember = request.cookies.get("sb-remember")?.value !== "false";
+
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({
             request,
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const cookieOptions: any = { ...options };
+            if (!isRemember && value) {
+              delete cookieOptions.maxAge;
+              delete cookieOptions.expires;
+            } else if (isRemember && value && !cookieOptions.maxAge) {
+              cookieOptions.maxAge = 60 * 60 * 24 * 365;
+            }
+            supabaseResponse.cookies.set(name, value, cookieOptions);
+          });
         },
       },
     });
@@ -44,6 +53,19 @@ export default async function proxy(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    // If authenticated user visits login or signup, redirect directly to dashboard or target
+    const isAuthRoute =
+      request.nextUrl.pathname === "/login" ||
+      request.nextUrl.pathname === "/signup";
+
+    if (user && isAuthRoute) {
+      const destination = request.nextUrl.searchParams.get("redirectedFrom") || "/dashboard";
+      const url = request.nextUrl.clone();
+      url.pathname = destination.startsWith("/") ? destination : "/dashboard";
+      url.searchParams.delete("redirectedFrom");
+      return NextResponse.redirect(url);
+    }
 
     // Protect dashboard routes if unauthenticated in live mode
     const isDashboardRoute =

@@ -81,10 +81,13 @@ export function UserMenu({
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
+      if (typeof document !== "undefined") {
+        document.cookie = "sb-remember=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      }
     } catch {
       // Ignore
     }
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   React.useEffect(() => {

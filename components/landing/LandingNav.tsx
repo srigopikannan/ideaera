@@ -3,10 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { Menu, X, ArrowUpRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export function LandingNav() {
   const [scrolled, setScrolled] = React.useState(false);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
   React.useEffect(() => {
     const handleScroll = () => {
@@ -14,6 +16,21 @@ export function LandingNav() {
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  React.useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        setIsAuthenticated(Boolean(session));
+      } catch {
+        // Fallback unauthenticated
+      }
+    };
+    checkAuth();
   }, []);
 
   return (
@@ -51,22 +68,41 @@ export function LandingNav() {
 
             <div className="hidden sm:block w-10 h-[1.5px] bg-white/40" />
 
-            <Link
-              href="/login"
-              className="text-[11px] font-mono tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
-            >
-              SIGN IN
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                className="text-[11px] font-mono tracking-[0.2em] text-indigo-400 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <span>DASHBOARD</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="text-[11px] font-mono tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
+              >
+                SIGN IN
+              </Link>
+            )}
           </div>
 
           {/* Mobile Right Controls */}
           <div className="flex items-center gap-3 md:hidden">
-            <Link
-              href="/login"
-              className="text-[10px] font-mono tracking-[0.16em] uppercase px-3 py-1.5 rounded-full border border-white/20 bg-white/5 text-neutral-300 hover:text-white"
-            >
-              Sign In
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                className="text-[10px] font-mono tracking-[0.16em] uppercase px-3 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:text-white"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="text-[10px] font-mono tracking-[0.16em] uppercase px-3 py-1.5 rounded-full border border-white/20 bg-white/5 text-neutral-300 hover:text-white"
+              >
+                Sign In
+              </Link>
+            )}
             <button
               onClick={() => setIsMobileOpen(true)}
               className="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
@@ -141,20 +177,32 @@ export function LandingNav() {
           </div>
 
           <div className="pt-6 border-t border-white/10 flex items-center justify-between text-xs font-mono text-neutral-400">
-            <Link
-              href="/login"
-              onClick={() => setIsMobileOpen(false)}
-              className="hover:text-white transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/signup"
-              onClick={() => setIsMobileOpen(false)}
-              className="text-white hover:text-indigo-300 transition-colors font-medium"
-            >
-              Create Account →
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setIsMobileOpen(false)}
+                className="text-indigo-400 hover:text-white transition-colors font-medium"
+              >
+                Go to Dashboard →
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setIsMobileOpen(false)}
+                  className="hover:text-white transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={() => setIsMobileOpen(false)}
+                  className="text-white hover:text-indigo-300 transition-colors font-medium"
+                >
+                  Create Account →
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

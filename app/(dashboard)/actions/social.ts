@@ -8,7 +8,7 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from "@/services/social";
-import { sendMessage } from "@/services/messaging";
+import { sendMessage, getMessages } from "@/services/messaging";
 import { revalidatePath } from "next/cache";
 
 export async function getNotificationsAction() {
@@ -49,6 +49,11 @@ export async function sendMessageAction(receiverId: string, content: string) {
   revalidatePath("/messages");
   revalidatePath(`/messages/${receiverId}`);
   return { success: true, message: msg };
+}
+
+export async function getMessagesAction(userId: string) {
+  const msgs = await getMessages(userId);
+  return { success: true, messages: msgs };
 }
 
 export async function markNotificationReadAction(notificationId: string) {

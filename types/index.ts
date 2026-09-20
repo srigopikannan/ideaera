@@ -174,6 +174,7 @@ export interface Message {
   content: string;
   created_at: string;
   read_at?: string | null;
+  is_read?: boolean;
 }
 
 export interface Conversation {

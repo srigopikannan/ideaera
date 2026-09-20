@@ -234,20 +234,19 @@ export function ProfileView({
               </>
             ) : (
               <>
+                <Link
+                  href={`/messages/${profile.id}`}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-neutral-200 hover:text-white hover:border-white/30 hover:bg-white/[0.08] transition-colors shadow-sm"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Message</span>
+                </Link>
+
                 {connectionStatus === "connected" ? (
-                  <>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-mono uppercase tracking-wider">
-                      <UserCheck className="h-3.5 w-3.5" />
-                      <span>Connected</span>
-                    </div>
-                    <Link
-                      href={`/messages?user=${profile.username}`}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-xs font-mono uppercase tracking-wider text-neutral-200 hover:text-white hover:border-white/30 transition-colors"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      <span>Message</span>
-                    </Link>
-                  </>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-mono uppercase tracking-wider">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    <span>Connected</span>
+                  </div>
                 ) : connectionStatus === "pending_sent" ? (
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-mono uppercase tracking-wider">
                     <Clock className="h-3.5 w-3.5" />

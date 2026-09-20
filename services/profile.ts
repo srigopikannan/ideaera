@@ -23,7 +23,7 @@ export function isDeletedProfile(p: any): boolean {
   return false;
 }
 
-function formatProfile(p: any, viewerUserId?: string): Profile {
+export function formatProfile(p: any, viewerUserId?: string): Profile {
   const skillsList: string[] = [];
   if (Array.isArray(p.user_skills)) {
     p.user_skills.forEach((us: any) => {
@@ -215,6 +215,31 @@ export async function getProfileByUsername(username: string): Promise<Profile | 
     }
   } catch (err) {
     console.error("Error in getProfileByUsername:", err);
+  }
+
+  return null;
+}
+
+export async function getProfileById(id: string): Promise<Profile | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (data && !error) {
+      if (isDeletedProfile(data)) {
+        return null;
+      }
+      return formatProfile(data, currentUserId);
+    }
+  } catch (err) {
+    console.error("Error in getProfileById:", err);
   }
 
   return null;

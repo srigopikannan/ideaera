@@ -1,15 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 import { Message, Conversation, Profile } from "@/types";
+import {
+  getAllProfiles,
+  getProfileById,
+  getProfileByUsername,
+  formatProfile,
+  isDeletedProfile,
+} from "@/services/profile";
 
 export async function getConversations(): Promise<Conversation[]> {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (user) {
       const { data, error } = await supabase
         .from("messages")
-        .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+        .select(
+          "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+        )
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
 
@@ -18,16 +29,19 @@ export async function getConversations(): Promise<Conversation[]> {
         const convMap = new Map<string, Conversation>();
         for (const msg of data) {
           const isSender = msg.sender_id === user.id;
-          const partner: Profile = isSender ? msg.receiver : msg.sender;
-          if (!partner) continue;
+          const rawPartner = isSender ? msg.receiver : msg.sender;
+          if (!rawPartner || isDeletedProfile(rawPartner)) continue;
+
+          const partner: Profile = formatProfile(rawPartner, user.id);
+          const isUnread = !isSender && !msg.is_read && !msg.read_at;
 
           if (!convMap.has(partner.id)) {
             convMap.set(partner.id, {
               other_user: partner,
               last_message: msg,
-              unread_count: !isSender && !msg.read_at ? 1 : 0,
+              unread_count: isUnread ? 1 : 0,
             });
-          } else if (!isSender && !msg.read_at) {
+          } else if (isUnread) {
             const existing = convMap.get(partner.id)!;
             existing.unread_count += 1;
           }
@@ -45,18 +59,37 @@ export async function getConversations(): Promise<Conversation[]> {
 export async function getMessages(otherUserId: string): Promise<Message[]> {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (user) {
       const { data, error } = await supabase
         .from("messages")
-        .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+        .select(
+          "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+        )
         .or(
           `and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`
         )
         .order("created_at", { ascending: true });
 
-      if (data && !error) return data;
+      if (data && !error) {
+        // Mark unread messages sent to current user as read
+        const nowIso = new Date().toISOString();
+        try {
+          await supabase
+            .from("messages")
+            .update({ is_read: true, read_at: nowIso })
+            .eq("sender_id", otherUserId)
+            .eq("receiver_id", user.id)
+            .or("is_read.eq.false,is_read.is.null,read_at.is.null");
+        } catch (markErr) {
+          console.error("Error marking messages as read:", markErr);
+        }
+
+        return data;
+      }
     }
   } catch (err) {
     console.error("Error in getMessages:", err);
@@ -67,24 +100,16 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
 
 export async function sendMessage(receiverId: string, content: string): Promise<Message> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     throw new Error("You must be logged in to send a message.");
   }
 
-  // Verify accepted connection exists between the two users
-  const { data: conn } = await supabase
-    .from("connections")
-    .select("id, status")
-    .or(
-      `and(requester_id.eq.${user.id},receiver_id.eq.${receiverId}),and(requester_id.eq.${receiverId},receiver_id.eq.${user.id})`
-    )
-    .eq("status", "accepted")
-    .maybeSingle();
-
-  if (!conn) {
-    throw new Error("You can only message users you are connected with.");
+  if (user.id === receiverId) {
+    throw new Error("You cannot send a message to yourself.");
   }
 
   const { data: inserted, error } = await supabase
@@ -93,8 +118,11 @@ export async function sendMessage(receiverId: string, content: string): Promise<
       sender_id: user.id,
       receiver_id: receiverId,
       content,
+      is_read: false,
     })
-    .select("*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)")
+    .select(
+      "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+    )
     .single();
 
   if (error || !inserted) {
@@ -124,4 +152,32 @@ export async function sendMessage(receiverId: string, content: string): Promise<
   }
 
   return inserted;
+}
+
+export async function getAllMessageableUsers(currentUserId?: string): Promise<Profile[]> {
+  try {
+    const profiles = await getAllProfiles();
+    if (currentUserId) {
+      return profiles.filter((p) => p.id !== currentUserId && !isDeletedProfile(p));
+    }
+    return profiles.filter((p) => !isDeletedProfile(p));
+  } catch (err) {
+    console.error("Error in getAllMessageableUsers:", err);
+    return [];
+  }
+}
+
+export async function getUserForMessaging(identifier: string): Promise<Profile | null> {
+  try {
+    const cleanId = decodeURIComponent(identifier).trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+    if (isUuid) {
+      const p = await getProfileById(cleanId);
+      if (p) return p;
+    }
+    return await getProfileByUsername(cleanId);
+  } catch (err) {
+    console.error("Error in getUserForMessaging:", err);
+    return null;
+  }
 }

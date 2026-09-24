@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles, getCurrentUserProfile } from "@/services/profile";
-import { Connection, Notification, MatchRecommendation, Profile } from "@/types";
+import { Connection, Notification, NotificationType, MatchRecommendation, Profile } from "@/types";
 
 export async function getConnections(): Promise<{
   all: Connection[];
@@ -51,7 +51,7 @@ export async function sendConnectionRequest(
     throw new Error("You cannot send a connection request to yourself.");
   }
 
-  // Validate User B exists
+  // Validate Target User exists
   const { data: targetProfile, error: targetErr } = await supabase
     .from("profiles")
     .select("id, full_name, username")
@@ -61,8 +61,6 @@ export async function sendConnectionRequest(
   if (targetErr || !targetProfile) {
     throw new Error("Target user profile does not exist.");
   }
-
-  console.log(`[CONNECTION] sender: ${user.id}, receiver: ${targetUserId}, type: ${connectionType}`);
 
   // Fetch sender profile for notification message
   const { data: senderProfile } = await supabase
@@ -87,40 +85,21 @@ export async function sendConnectionRequest(
 
     // If pending and target previously sent it to user, user clicking Connect auto-accepts!
     if (existing.status === "pending" && existing.receiver_id === user.id) {
-      const { data: accepted, error: acceptErr } = await supabase
+      await updateConnectionStatus(existing.id, "accepted");
+      const { data: accepted } = await supabase
         .from("connections")
-        .update({ status: "accepted", updated_at: new Date().toISOString() })
-        .eq("id", existing.id)
         .select("*, requester:profiles!requester_id(*), receiver:profiles!receiver_id(*)")
+        .eq("id", existing.id)
         .single();
-
-      if (!acceptErr && accepted) {
-        console.log(`[NOTIFICATION] recipient: ${existing.requester_id}, actor: ${user.id}, connection: ${accepted.id}`);
-        const { error: notifErr } = await supabase.from("notifications").insert({
-          recipient_id: existing.requester_id,
-          user_id: existing.requester_id,
-          actor_id: user.id,
-          connection_id: accepted.id,
-          entity_id: accepted.id,
-          type: "connection_accepted",
-          title: "Connection Accepted",
-          message: `${senderName} accepted your connection request.`,
-          read: false,
-          is_read: false,
-        });
-        if (notifErr) {
-          console.error("[NOTIFICATION ERROR]", notifErr);
-        }
-        return accepted;
-      }
+      return accepted || existing;
     }
 
-    // If pending and user already sent it to target, return existing (no duplicate)
+    // If pending and user already sent it to target, return existing without creating duplicate notifications
     if (existing.status === "pending" && existing.requester_id === user.id) {
       return existing;
     }
 
-    // If rejected, allow re-requesting
+    // If rejected, allow re-requesting cleanly
     if (existing.status === "rejected") {
       const isPublic = connectionType === "public";
       const newStatus = isPublic ? "accepted" : "pending";
@@ -138,27 +117,35 @@ export async function sendConnectionRequest(
         .single();
 
       if (!renewErr && renewed) {
-        const notifType = isPublic ? "connection_accepted" : "connection_request";
+        const notifType: NotificationType = isPublic ? "connection_accepted" : "connection_request";
         const notifTitle = isPublic ? "New Connection" : "Connection Request";
         const notifMessage = isPublic
           ? `${senderName} connected with you.`
           : `${senderName} sent you a connection request.`;
 
-        console.log(`[NOTIFICATION] recipient: ${targetUserId}, actor: ${user.id}, connection: ${renewed.id}`);
-        const { error: notifErr } = await supabase.from("notifications").insert({
-          recipient_id: targetUserId,
-          user_id: targetUserId,
-          actor_id: user.id,
-          connection_id: renewed.id,
-          entity_id: renewed.id,
-          type: notifType,
-          title: notifTitle,
-          message: notifMessage,
-          read: false,
-          is_read: false,
-        });
-        if (notifErr) {
-          console.error("[NOTIFICATION ERROR]", notifErr);
+        // Check if an unread notification already exists to prevent duplicate spam
+        const { data: existingNotif } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("connection_id", renewed.id)
+          .eq("recipient_id", targetUserId)
+          .eq("type", notifType)
+          .maybeSingle();
+
+        if (!existingNotif) {
+          await supabase.from("notifications").insert({
+            recipient_id: targetUserId,
+            user_id: targetUserId,
+            actor_id: user.id,
+            connection_id: renewed.id,
+            entity_id: renewed.id,
+            type: notifType,
+            title: notifTitle,
+            message: notifMessage,
+            read: false,
+            is_read: false,
+            updated_at: new Date().toISOString(),
+          });
         }
         return renewed;
       }
@@ -185,39 +172,44 @@ export async function sendConnectionRequest(
     throw new Error(connError?.message || "Failed to send connection request.");
   }
 
-  console.log(`[CONNECTION SUCCESS] id: ${inserted.id}, requester: ${user.id}, receiver: ${targetUserId}, status: ${initialStatus}`);
-
   // Create notification server-side for receiver
-  const notifType = isPublic ? "connection_accepted" : "connection_request";
+  const notifType: NotificationType = isPublic ? "connection_accepted" : "connection_request";
   const notifTitle = isPublic ? "New Connection" : "Connection Request";
   const notifMessage = isPublic
     ? `${senderName} connected with you.`
     : `${senderName} sent you a connection request.`;
 
-  console.log(`[NOTIFICATION] recipient: ${targetUserId}, actor: ${user.id}, connection: ${inserted.id}`);
-  const { error: notifErr } = await supabase.from("notifications").insert({
-    recipient_id: targetUserId,
-    user_id: targetUserId,
-    actor_id: user.id,
-    connection_id: inserted.id,
-    entity_id: inserted.id,
-    type: notifType,
-    title: notifTitle,
-    message: notifMessage,
-    read: false,
-    is_read: false,
-  });
+  // Idempotency: verify no duplicate notification exists
+  const { data: existingNotif } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("connection_id", inserted.id)
+    .eq("recipient_id", targetUserId)
+    .maybeSingle();
 
-  if (notifErr) {
-    console.error("[NOTIFICATION ERROR]", notifErr);
-  } else {
-    console.log(`[NOTIFICATION SUCCESS] created notification for receiver ${targetUserId}`);
+  if (!existingNotif) {
+    await supabase.from("notifications").insert({
+      recipient_id: targetUserId,
+      user_id: targetUserId,
+      actor_id: user.id,
+      connection_id: inserted.id,
+      entity_id: inserted.id,
+      type: notifType,
+      title: notifTitle,
+      message: notifMessage,
+      read: false,
+      is_read: false,
+      updated_at: new Date().toISOString(),
+    });
   }
 
   return inserted;
 }
 
-export async function updateConnectionStatus(connectionId: string, status: "accepted" | "rejected"): Promise<void> {
+export async function updateConnectionStatus(
+  connectionId: string,
+  status: "accepted" | "rejected"
+): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -225,7 +217,7 @@ export async function updateConnectionStatus(connectionId: string, status: "acce
     throw new Error("You must be logged in to manage connections.");
   }
 
-  // Fetch connection to verify authorization
+  // Fetch connection to verify authorization and current state
   const { data: connection, error: fetchError } = await supabase
     .from("connections")
     .select("id, requester_id, receiver_id, status")
@@ -236,7 +228,13 @@ export async function updateConnectionStatus(connectionId: string, status: "acce
     throw new Error("Connection record not found.");
   }
 
-  // Security authorization: only receiver can accept
+  // If already at requested status, simply ensure notification is synced and return
+  if (connection.status === status) {
+    await syncConnectionNotifications(connectionId, status, connection.requester_id, connection.receiver_id);
+    return;
+  }
+
+  // Security authorization: only receiver can accept a request
   if (status === "accepted" && connection.receiver_id !== user.id) {
     throw new Error("Unauthorized: Only the recipient can accept a connection request.");
   }
@@ -246,39 +244,102 @@ export async function updateConnectionStatus(connectionId: string, status: "acce
     throw new Error("Unauthorized: You are not a party to this connection.");
   }
 
-  const { error } = await supabase
+  // Update connection status
+  const now = new Date().toISOString();
+  const { error: updateErr } = await supabase
     .from("connections")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status, updated_at: now })
     .eq("id", connectionId);
 
-  if (error) {
-    throw new Error(error.message);
+  if (updateErr) {
+    throw new Error(updateErr.message);
   }
 
-  // Notify requester if accepted
+  // Synchronize and update all notifications associated with this connection
+  await syncConnectionNotifications(connectionId, status, connection.requester_id, connection.receiver_id);
+}
+
+/**
+ * Helper to synchronize notification records in DB so they reflect current status
+ */
+async function syncConnectionNotifications(
+  connectionId: string,
+  status: "accepted" | "rejected",
+  requesterId: string,
+  receiverId: string
+) {
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  // Fetch actor (requester) profile name for receiver's notification
+  const { data: requesterProfile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", requesterId)
+    .maybeSingle();
+  const requesterName = requesterProfile?.full_name || "Innovator";
+
+  // Fetch receiver profile name for requester's notification
+  const { data: receiverProfile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", receiverId)
+    .maybeSingle();
+  const receiverName = receiverProfile?.full_name || "Innovator";
+
   if (status === "accepted") {
-    try {
-      const { data: myProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-      const myName = myProfile?.full_name || "An innovator";
-      console.log(`[NOTIFICATION] recipient: ${connection.requester_id}, actor: ${user.id}, connection: ${connectionId}`);
-      const { error: notifErr } = await supabase.from("notifications").insert({
-        recipient_id: connection.requester_id,
-        user_id: connection.requester_id,
-        actor_id: user.id,
-        connection_id: connection.id,
-        entity_id: connection.id,
+    // 1. Update RECEIVER's notifications: transition from connection_request to connection_accepted
+    await supabase
+      .from("notifications")
+      .update({
+        type: "connection_accepted",
+        title: "Connected",
+        message: `${requesterName} is now connected with you.`,
+        read: true,
+        is_read: true,
+        updated_at: now,
+      })
+      .eq("connection_id", connectionId)
+      .eq("recipient_id", receiverId);
+
+    // 2. Notify REQUESTER (User A) that User B accepted, with duplicate prevention
+    const { data: existingAcceptNotif } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("connection_id", connectionId)
+      .eq("recipient_id", requesterId)
+      .eq("type", "connection_accepted")
+      .maybeSingle();
+
+    if (!existingAcceptNotif) {
+      await supabase.from("notifications").insert({
+        recipient_id: requesterId,
+        user_id: requesterId,
+        actor_id: receiverId,
+        connection_id: connectionId,
+        entity_id: connectionId,
         type: "connection_accepted",
         title: "Connection Accepted",
-        message: `${myName} accepted your connection request.`,
+        message: `${receiverName} accepted your connection request.`,
         read: false,
         is_read: false,
+        updated_at: now,
       });
-      if (notifErr) {
-        console.error("[NOTIFICATION ERROR]", notifErr);
-      }
-    } catch (err) {
-      console.error("[NOTIFICATION ERROR]", err);
     }
+  } else if (status === "rejected") {
+    // Update RECEIVER's notifications: transition to connection_rejected, removing actions
+    await supabase
+      .from("notifications")
+      .update({
+        type: "connection_rejected",
+        title: "Connection Rejected",
+        message: "Connection request rejected.",
+        read: true,
+        is_read: true,
+        updated_at: now,
+      })
+      .eq("connection_id", connectionId)
+      .eq("recipient_id", receiverId);
   }
 }
 
@@ -306,7 +367,31 @@ function formatNotificationTitle(type: string): string {
     case "connection_request":
       return "Connection Request";
     case "connection_accepted":
-      return "Connection Accepted";
+      return "Connected";
+    case "connection_rejected":
+      return "Connection Rejected";
+    case "follow_request":
+      return "Follow Request";
+    case "follow_accepted":
+      return "New Follower";
+    case "follow_rejected":
+      return "Follow Request Rejected";
+    case "idea_suggestion":
+      return "💡 New Idea Suggestion";
+    case "people_suggestion":
+      return "👥 People Suggestion";
+    case "team_suggestion":
+      return "🤝 Team Formation";
+    case "idea_trending":
+      return "🔥 Your idea is trending!";
+    case "idea_milestone":
+      return "🎯 Milestone Reached";
+    case "hackathon_suggestion":
+      return "⚡ Hackathon Suggestion";
+    case "project_activity":
+      return "🛠️ Project Activity";
+    case "badge_earned":
+      return "🏆 Badge Earned!";
     case "idea_like":
       return "Concept Endorsement";
     case "idea_comment":
@@ -316,9 +401,9 @@ function formatNotificationTitle(type: string): string {
     case "project_joined":
       return "Venture Member Joined";
     case "message":
-      return "New Transmission";
+      return "New Message";
     default:
-      return "System Signal";
+      return "Notification";
   }
 }
 
@@ -330,7 +415,11 @@ export async function getNotifications(): Promise<Notification[]> {
     if (user) {
       const { data, error } = await supabase
         .from("notifications")
-        .select("*, actor:profiles!actor_id(id, full_name, username, avatar_url, headline)")
+        .select(`
+          *,
+          actor:profiles!actor_id(id, full_name, username, avatar_url, headline),
+          connection:connections!connection_id(id, status, requester_id, receiver_id)
+        `)
         .or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
 
@@ -339,23 +428,70 @@ export async function getNotifications(): Promise<Notification[]> {
         return [];
       }
 
-      console.log(`[NOTIFICATION QUERY] Found ${data?.length || 0} notifications for user ${user.id}`);
+      return (data || []).map((r: any) => {
+        const actorName = r.actor?.full_name || "An innovator";
+        let type: NotificationType = r.type;
+        let title = r.title || formatNotificationTitle(r.type);
+        let message = r.message;
+        let isRead = Boolean(r.read ?? r.is_read);
+        const connection = r.connection || null;
+        const connectionStatus = connection?.status || null;
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        user_id: r.recipient_id || r.user_id,
-        recipient_id: r.recipient_id || r.user_id,
-        actor_id: r.actor_id || null,
-        actor: r.actor || undefined,
-        connection_id: r.connection_id || r.entity_id || r.related_id || null,
-        type: r.type,
-        title: r.title || formatNotificationTitle(r.type),
-        message: r.message,
-        related_id: r.connection_id || r.entity_id || r.related_id || null,
-        read: Boolean(r.read ?? r.is_read),
-        is_read: Boolean(r.is_read ?? r.read),
-        created_at: r.created_at,
-      }));
+        // STATE SYNCHRONIZATION:
+        // Always read live connection status from the database.
+        // If connection is accepted or rejected, never leave a pending connection request!
+        if (connection) {
+          if (connection.status === "accepted") {
+            if (type === "connection_request") {
+              type = "connection_accepted";
+              title = "Connected";
+              message =
+                r.recipient_id === connection.receiver_id
+                  ? `${actorName} is now connected with you.`
+                  : `${actorName} accepted your connection request.`;
+              isRead = true;
+            }
+          } else if (connection.status === "rejected") {
+            if (type === "connection_request") {
+              type = "connection_rejected";
+              title = "Connection Rejected";
+              message = "Connection request rejected.";
+              isRead = true;
+            }
+          }
+        } else if (r.connection_id && !connection) {
+          // Connection was removed or canceled
+          if (type === "connection_request") {
+            type = "connection_rejected";
+            title = "Connection Canceled";
+            message = "This connection request is no longer active.";
+            isRead = true;
+          }
+        }
+
+        return {
+          id: r.id,
+          user_id: r.recipient_id || r.user_id,
+          recipient_id: r.recipient_id || r.user_id,
+          actor_id: r.actor_id || null,
+          actor: r.actor || undefined,
+          connection_id: r.connection_id || r.entity_id || r.related_id || null,
+          connection: connection || undefined,
+          connection_status: connectionStatus,
+          idea_id: r.idea_id || null,
+          project_id: r.project_id || null,
+          reference_id: r.connection_id || r.entity_id || r.related_id || null,
+          related_id: r.connection_id || r.entity_id || r.related_id || null,
+          type,
+          title,
+          message,
+          read: isRead,
+          is_read: isRead,
+          data: r.data || {},
+          created_at: r.created_at,
+          updated_at: r.updated_at || r.created_at,
+        };
+      });
     }
   } catch (err) {
     console.error("Error in getNotifications:", err);
@@ -367,7 +503,10 @@ export async function getNotifications(): Promise<Notification[]> {
 export async function markNotificationAsRead(id: string): Promise<void> {
   try {
     const supabase = await createClient();
-    await supabase.from("notifications").update({ is_read: true, read: true }).eq("id", id);
+    await supabase
+      .from("notifications")
+      .update({ is_read: true, read: true, updated_at: new Date().toISOString() })
+      .eq("id", id);
   } catch (err) {
     console.error("Error in markNotificationAsRead:", err);
   }
@@ -380,13 +519,182 @@ export async function markAllNotificationsAsRead(): Promise<void> {
     if (user) {
       await supabase
         .from("notifications")
-        .update({ is_read: true, read: true })
+        .update({ is_read: true, read: true, updated_at: new Date().toISOString() })
         .or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`);
     }
   } catch (err) {
     console.error("Error in markAllNotificationsAsRead:", err);
   }
 }
+
+// ===================================================================
+// DEDICATED NOTIFICATION GENERATORS (IDEAS, PEOPLE, MILESTONES, BADGES)
+// ===================================================================
+
+/**
+ * Generate an idea suggestion notification for a user (Idempotent)
+ */
+export async function createIdeaSuggestionNotification(userId: string, ideaId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { data: idea } = await supabase.from("ideas").select("id, title, creator_id").eq("id", ideaId).maybeSingle();
+    if (!idea || idea.creator_id === userId) return;
+
+    // Check duplicate
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("recipient_id", userId)
+      .eq("type", "idea_suggestion")
+      .eq("idea_id", ideaId)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from("notifications").insert({
+        recipient_id: userId,
+        user_id: userId,
+        actor_id: idea.creator_id,
+        idea_id: idea.id,
+        related_id: idea.id,
+        type: "idea_suggestion",
+        title: "💡 New Idea Suggestion",
+        message: `An idea related to your interests is available: "${idea.title}".`,
+        read: false,
+        is_read: false,
+      });
+    }
+  } catch (err) {
+    console.error("Error creating idea suggestion notification:", err);
+  }
+}
+
+/**
+ * Generate a people suggestion notification (Idempotent)
+ */
+export async function createPeopleSuggestionNotification(
+  userId: string,
+  targetUserId: string,
+  sharedSkillOrInterest?: string
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    if (userId === targetUserId) return;
+
+    const { data: target } = await supabase.from("profiles").select("id, full_name, username").eq("id", targetUserId).maybeSingle();
+    if (!target) return;
+
+    // Check duplicate
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("recipient_id", userId)
+      .eq("type", "people_suggestion")
+      .eq("actor_id", targetUserId)
+      .maybeSingle();
+
+    if (!existing) {
+      const reasonMsg = sharedSkillOrInterest
+        ? `You may want to connect with ${target.full_name} because you share skills in ${sharedSkillOrInterest}.`
+        : `You may want to connect with ${target.full_name} based on shared interests.`;
+
+      await supabase.from("notifications").insert({
+        recipient_id: userId,
+        user_id: userId,
+        actor_id: targetUserId,
+        related_id: target.username,
+        type: "people_suggestion",
+        title: "👥 People Suggestion",
+        message: reasonMsg,
+        read: false,
+        is_read: false,
+      });
+    }
+  } catch (err) {
+    console.error("Error creating people suggestion notification:", err);
+  }
+}
+
+/**
+ * Check and create milestone / trending notifications when threshold is achieved (Idempotent)
+ */
+export async function checkAndCreateIdeaMilestoneNotification(ideaId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { data: idea } = await supabase
+      .from("ideas")
+      .select("id, title, creator_id, likes_count")
+      .eq("id", ideaId)
+      .maybeSingle();
+
+    if (!idea || !idea.creator_id) return;
+
+    const likes = idea.likes_count || 0;
+    // Milestone threshold: e.g. 5 likes for trending
+    if (likes >= 5) {
+      const { data: existing } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("recipient_id", idea.creator_id)
+        .eq("type", "idea_trending")
+        .eq("idea_id", ideaId)
+        .maybeSingle();
+
+      if (!existing) {
+        await supabase.from("notifications").insert({
+          recipient_id: idea.creator_id,
+          user_id: idea.creator_id,
+          idea_id: idea.id,
+          related_id: idea.id,
+          type: "idea_trending",
+          title: "🔥 Your idea is trending!",
+          message: `Your idea "${idea.title}" has reached ${likes} endorsements!`,
+          read: false,
+          is_read: false,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error checking idea milestone:", err);
+  }
+}
+
+/**
+ * Create a badge earned notification (Idempotent)
+ */
+export async function createBadgeNotification(
+  userId: string,
+  badgeName: string,
+  badgeDescription: string
+): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("recipient_id", userId)
+      .eq("type", "badge_earned")
+      .ilike("message", `%${badgeName}%`)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from("notifications").insert({
+        recipient_id: userId,
+        user_id: userId,
+        type: "badge_earned",
+        title: "🏆 Badge Earned!",
+        message: `You earned the "${badgeName}" badge: ${badgeDescription}`,
+        read: false,
+        is_read: false,
+      });
+    }
+  } catch (err) {
+    console.error("Error creating badge notification:", err);
+  }
+}
+
+// ===================================================================
+// MATCH RECOMMENDATIONS (PRESERVED)
+// ===================================================================
 
 export async function getMatchRecommendations(currentProfile?: Profile | null): Promise<MatchRecommendation[]> {
   const profile = currentProfile || (await getCurrentUserProfile());
@@ -448,7 +756,6 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
     .filter((w) => w.length > 3);
 
   const recommendations: MatchRecommendation[] = candidates.map((candidate) => {
-    // Distinct skills: from candidate user_skills or headline capabilities
     let candSkills = candidate.skills && candidate.skills.length > 0 ? candidate.skills : [];
     if (candSkills.length === 0) {
       const lowerBio = `${candidate.headline || ""} ${candidate.bio || ""}`.toLowerCase();
@@ -459,7 +766,6 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
       candSkills = detected.length > 0 ? detected : ["AI / ML Systems", "Full-Stack Development"];
     }
 
-    // Distinct interests: from published ideas/categories or innovation areas
     const candInterests =
       candidate.interests && candidate.interests.length > 0
         ? candidate.interests
@@ -471,17 +777,14 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
     const complementarySkills = candSkills.filter((s) => !currentSkills.has(s.toLowerCase().trim()));
     const sharedInterests = candInterests.filter((i) => currentInterests.has(i.toLowerCase().trim()));
 
-    // Shared domain keywords from headline or bio
     const candText = `${candidate.headline || ""} ${candidate.bio || ""}`.toLowerCase();
     const sharedKeywords = headlineKeywords.filter((kw) => candText.includes(kw));
 
-    // Deterministic base resonance from IDs
     let hash = 0;
     const combinedStr = `${profile.id}_${candidate.id}`;
     for (let i = 0; i < combinedStr.length; i++) {
       hash = (hash * 31 + combinedStr.charCodeAt(i)) % 1000;
     }
-    // Baseline between 52 and 72 so every profile has a natural starting resonance
     const baseSynergy = 52 + (hash % 21);
 
     const skillScore = sharedSkills.length * 15;

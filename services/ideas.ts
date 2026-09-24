@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Idea, IdeaComment } from "@/types";
+import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
 
 function mapIdea(raw: any, isLiked: boolean = false): Idea {
   const authorProfile = raw.creator || raw.author || null;
@@ -330,6 +331,45 @@ export async function toggleLikeIdea(id: string): Promise<{ liked: boolean; like
       await supabase.from("idea_likes").delete().eq("idea_id", id).eq("user_id", user.id);
     } else {
       await supabase.from("idea_likes").insert({ idea_id: id, user_id: user.id });
+
+      // Notify idea creator if someone else liked their idea
+      try {
+        const { data: idea } = await supabase.from("ideas").select("creator_id, title").eq("id", id).single();
+        if (idea && idea.creator_id && idea.creator_id !== user.id) {
+          const { data: existingNotif } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("recipient_id", idea.creator_id)
+            .eq("actor_id", user.id)
+            .eq("idea_id", id)
+            .eq("type", "idea_like")
+            .maybeSingle();
+
+          if (!existingNotif) {
+            await supabase.from("notifications").insert({
+              recipient_id: idea.creator_id,
+              user_id: idea.creator_id,
+              actor_id: user.id,
+              idea_id: id,
+              related_id: id,
+              type: "idea_like",
+              title: "Concept Endorsement",
+              message: `endorsed your idea "${idea.title}".`,
+              read: false,
+              is_read: false,
+            });
+          }
+        }
+      } catch (likeNotifErr) {
+        console.error("Error creating idea_like notification:", likeNotifErr);
+      }
+
+      // Check milestone threshold
+      try {
+        await checkAndCreateIdeaMilestoneNotification(id);
+      } catch (milestoneErr) {
+        console.error("Error checking milestone notification:", milestoneErr);
+      }
     }
 
     const { data: updated } = await supabase.from("ideas").select("likes_count").eq("id", id).single();
@@ -360,6 +400,27 @@ export async function addIdeaComment(ideaId: string, content: string): Promise<I
 
   if (error || !inserted) {
     throw new Error(error?.message || "Comments are currently unavailable.");
+  }
+
+  // Notify idea creator if someone else commented on their idea
+  try {
+    const { data: idea } = await supabase.from("ideas").select("creator_id, title").eq("id", ideaId).single();
+    if (idea && idea.creator_id && idea.creator_id !== user.id) {
+      await supabase.from("notifications").insert({
+        recipient_id: idea.creator_id,
+        user_id: idea.creator_id,
+        actor_id: user.id,
+        idea_id: ideaId,
+        related_id: ideaId,
+        type: "idea_comment",
+        title: "New Critique Note",
+        message: `commented on your idea "${idea.title}".`,
+        read: false,
+        is_read: false,
+      });
+    }
+  } catch (commentNotifErr) {
+    console.error("Error creating idea_comment notification:", commentNotifErr);
   }
 
   return inserted;

@@ -167,20 +167,48 @@ export interface Conversation {
   unread_count: number;
 }
 
+export type NotificationType =
+  | 'connection_request'
+  | 'connection_accepted'
+  | 'connection_rejected'
+  | 'follow_request'
+  | 'follow_accepted'
+  | 'follow_rejected'
+  | 'idea_suggestion'
+  | 'people_suggestion'
+  | 'team_suggestion'
+  | 'idea_milestone'
+  | 'idea_trending'
+  | 'hackathon_suggestion'
+  | 'project_activity'
+  | 'badge_earned'
+  | 'message'
+  | 'idea_like'
+  | 'idea_comment'
+  | 'project_invite'
+  | 'project_joined';
+
 export interface Notification {
   id: string;
   user_id: string;
   recipient_id?: string;
   actor_id?: string | null;
-  actor?: Profile;
+  actor?: Profile | null;
   connection_id?: string | null;
-  type: 'connection_request' | 'connection_accepted' | 'message' | 'idea_like' | 'idea_comment' | 'project_invite' | 'project_joined';
+  connection?: Connection | null;
+  connection_status?: 'pending' | 'accepted' | 'rejected' | null;
+  idea_id?: string | null;
+  project_id?: string | null;
+  reference_id?: string | null;
+  related_id?: string | null;
+  type: NotificationType;
   title: string;
   message: string;
-  related_id?: string | null;
   read: boolean;
   is_read?: boolean;
+  data?: Record<string, any>;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface MatchRecommendation {

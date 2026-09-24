@@ -7,6 +7,8 @@ import {
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  createIdeaSuggestionNotification,
+  createPeopleSuggestionNotification,
 } from "@/services/social";
 import {
   sendMessage,
@@ -73,10 +75,24 @@ export async function markConversationReadAction(otherUserId: string) {
 
 export async function markNotificationReadAction(notificationId: string) {
   await markNotificationAsRead(notificationId);
+  revalidatePath("/notifications");
   return { success: true };
 }
 
 export async function markAllNotificationsReadAction() {
   await markAllNotificationsAsRead();
+  revalidatePath("/notifications");
+  return { success: true };
+}
+
+export async function createIdeaSuggestionAction(userId: string, ideaId: string) {
+  await createIdeaSuggestionNotification(userId, ideaId);
+  revalidatePath("/notifications");
+  return { success: true };
+}
+
+export async function createPeopleSuggestionAction(userId: string, targetUserId: string, reason?: string) {
+  await createPeopleSuggestionNotification(userId, targetUserId, reason);
+  revalidatePath("/notifications");
   return { success: true };
 }

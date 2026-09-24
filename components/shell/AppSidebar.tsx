@@ -10,7 +10,6 @@ import {
   Trophy,
   Users,
   FolderGit2,
-  Building2,
   Zap,
   UserCheck,
   MessageSquare,
@@ -18,7 +17,6 @@ import {
   User,
   Settings,
   LayoutDashboard,
-  Target,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -37,8 +35,6 @@ const coreNav: NavItem[] = [
 const workspaceNav: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "People", href: "/people", icon: Users },
-  { name: "Problems", href: "/problems", icon: Target },
-  { name: "Companies", href: "/companies", icon: Building2 },
   { name: "Projects", href: "/projects", icon: FolderGit2 },
   { name: "Match", href: "/match", icon: Zap },
   { name: "Connections", href: "/connections", icon: UserCheck },

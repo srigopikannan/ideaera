@@ -1,4 +1,4 @@
-import { Profile, Idea, Project, Hackathon, Company, Connection, Message, Notification, Conversation } from "@/types";
+import { Profile, Idea, Project, Hackathon, Connection, Message, Notification, Conversation } from "@/types";
 
 export const MOCK_CURRENT_USER: Profile = {
   id: "usr_curr_1",
@@ -341,79 +341,6 @@ export const MOCK_HACKATHONS: Hackathon[] = [
     created_at: "2026-02-25T16:00:00Z",
     tags: ["Bioinformatics", "HealthTech", "WebGPU", "ML"],
     prizes: "$60,000 Research Fellowship",
-  },
-];
-
-export const MOCK_COMPANIES: Company[] = [
-  {
-    id: "comp_1",
-    name: "VoxelForge AI",
-    slug: "voxelforge-ai",
-    logo_url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
-    description:
-      "Building next-generation generative spatial compute and 3D simulation tools for developers and robotics systems worldwide.",
-    website: "https://voxelforge.ai",
-    industry: "Artificial Intelligence",
-    location: "San Francisco, CA",
-    size: "45-100 People",
-    tech_stack: ["PyTorch", "CUDA", "TypeScript", "React", "Rust"],
-    created_at: "2024-03-10T10:00:00Z",
-  },
-  {
-    id: "comp_2",
-    name: "Synapse Bio",
-    slug: "synapse-bio",
-    logo_url: "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=200&auto=format&fit=crop&q=80",
-    description:
-      "Developing computational biology pipelines and open neural interface diagnostics to pioneer generative therapeutics.",
-    website: "https://synapsebio.org",
-    industry: "Biotechnology",
-    location: "Boston, MA",
-    size: "20-50 People",
-    tech_stack: ["Python", "Next.js", "PostgreSQL", "Docker", "AWS"],
-    created_at: "2024-06-15T11:00:00Z",
-  },
-  {
-    id: "comp_3",
-    name: "Aether Labs",
-    slug: "aether-labs",
-    logo_url: "https://images.unsplash.com/photo-1534972195531-a756b1126f24?w=200&auto=format&fit=crop&q=80",
-    description:
-      "Decentralized verifiable computing infrastructure for privacy-first collaborative applications and zero-knowledge primitives.",
-    website: "https://aetherlabs.tech",
-    industry: "Web3 & Cloud",
-    location: "Zurich, Switzerland",
-    size: "30-75 People",
-    tech_stack: ["Rust", "Solidity", "Go", "Kubernetes", "GraphQL"],
-    created_at: "2023-11-20T12:00:00Z",
-  },
-  {
-    id: "comp_4",
-    name: "Hyperion Robotics",
-    slug: "hyperion-robotics",
-    logo_url: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=200&auto=format&fit=crop&q=80",
-    description:
-      "Autonomous robotics and perception systems for automated agroforestry, precision soil analysis, and regenerative farming.",
-    website: "https://hyperionrobotics.io",
-    industry: "Robotics & Hardware",
-    location: "Austin, TX",
-    size: "50-120 People",
-    tech_stack: ["C++", "ROS 2", "Python", "Computer Vision", "Embedded Linux"],
-    created_at: "2024-01-05T09:00:00Z",
-  },
-  {
-    id: "comp_5",
-    name: "Kite Flow",
-    slug: "kite-flow",
-    logo_url: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=200&auto=format&fit=crop&q=80",
-    description:
-      "Next-generation collaborative canvas and telemetry architecture for modern engineering, product, and distributed research squads.",
-    website: "https://kiteflow.app",
-    industry: "Developer Tools",
-    location: "Remote / Global",
-    size: "15-30 People",
-    tech_stack: ["TypeScript", "WebSockets", "Canvas API", "PostgreSQL", "Next.js"],
-    created_at: "2024-08-18T14:30:00Z",
   },
 ];
 

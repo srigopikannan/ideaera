@@ -60,24 +60,20 @@ export interface Idea {
   problem?: string | null;
   solution?: string | null;
   goals?: string | null;
-    skills_needed?: string[];
-    collaboration_info?: string | null;
-    problem_id?: string | null;
-    problem_rel?: CompanyProblem | null;
-    company_id?: string | null;
-    company?: Company | null;
-    version?: number;
-    version_history?: IdeaVersion[];
-    category: string;
-    tags: string[];
-    status: 'open' | 'in_progress' | 'implemented';
-    visibility?: 'public' | 'community' | 'selected' | 'private';
-    likes_count: number;
-    comments_count: number;
-    created_at: string;
-    updated_at: string;
-    is_liked?: boolean;
-  }
+  skills_needed?: string[];
+  collaboration_info?: string | null;
+  version?: number;
+  version_history?: IdeaVersion[];
+  category: string;
+  tags: string[];
+  status: 'open' | 'in_progress' | 'implemented';
+  visibility?: 'public' | 'community' | 'selected' | 'private';
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+  updated_at: string;
+  is_liked?: boolean;
+}
   
   export interface IdeaComment {
     id: string;
@@ -137,79 +133,6 @@ export interface Idea {
     max_team_size?: number;
     status?: 'ongoing' | 'upcoming' | 'ended';
     is_date_tbd?: boolean;
-  }
-  
-  export type ProblemType = 'real_world_problem' | 'technical_challenge' | 'innovation_challenge' | 'hackathon_challenge';
-  export type ProblemSourceType = 'official_company' | 'community';
-  export type ProblemDifficulty = 'Beginner' | 'Intermediate' | 'Advanced';
-  export type ProblemStatus = 'draft' | 'pending_review' | 'open' | 'in_progress' | 'solved' | 'closed' | 'rejected';
-  
-  export interface CompanyProblem {
-    id: string;
-    company_id: string;
-    company?: Company;
-    title: string;
-    slug: string;
-    summary: string;
-    description: string;
-    problem_type: ProblemType;
-    source_type: ProblemSourceType;
-    source_url?: string | null;
-    source_title?: string | null;
-    source_published_at?: string | null;
-    required_skills: string[];
-    industry: string;
-    difficulty: ProblemDifficulty;
-    status: ProblemStatus;
-    created_by?: string | null;
-    creator?: Profile | null;
-    created_at: string;
-    updated_at: string;
-    verified_at?: string | null;
-    verified_by?: string | null;
-    last_reviewed_at?: string | null;
-    views_count?: number;
-    solutions_count?: number;
-    saves_count?: number;
-    is_saved?: boolean;
-    solutions?: Idea[];
-  }
-  
-  export interface ProblemReport {
-    id: string;
-    problem_id: string;
-    reporter_id?: string | null;
-    reason: 'incorrect_information' | 'not_affiliated' | 'copyright_concern' | 'misleading' | 'spam' | 'outdated' | 'other';
-    details?: string | null;
-    status: 'pending' | 'reviewed' | 'action_taken' | 'dismissed';
-    created_at: string;
-    reviewed_at?: string | null;
-    resolution_notes?: string | null;
-  }
-  
-  export interface Company {
-    id: string;
-    name: string;
-    slug: string;
-    logo_url?: string | null;
-    description: string;
-    website?: string | null;
-    website_url?: string | null;
-    industry: string;
-    location: string;
-    created_at: string;
-    updated_at?: string;
-    tech_stack?: string[];
-    size?: string | null;
-    owner_id?: string;
-    owner?: Profile;
-    verification_status?: 'verified' | 'unverified' | 'pending_verification';
-    is_verified?: boolean;
-    verified_at?: string | null;
-    verified_by?: string | null;
-    challenges_count?: number;
-    problems?: CompanyProblem[];
-    solutions?: Idea[];
   }
 
 export interface Connection {

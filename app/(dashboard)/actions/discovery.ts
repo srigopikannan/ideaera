@@ -4,8 +4,6 @@ import { getAllProfiles } from "@/services/profile";
 import { getIdeas } from "@/services/ideas";
 import { getProjects } from "@/services/projects";
 import { getHackathons } from "@/services/hackathons";
-import { getCompanies } from "@/services/companies";
-import { getProblems } from "@/services/problems";
 
 export interface GlobalSearchResult {
   people: {
@@ -25,16 +23,6 @@ export interface GlobalSearchResult {
   ideas: { id: string; title: string; category: string; display_id?: string }[];
   projects: { id: string; slug: string; name: string; description: string }[];
   hackathons: { id: string; title: string; mode: string }[];
-  companies: { id: string; slug: string; name: string; industry: string }[];
-  problems: {
-    id: string;
-    slug: string;
-    title: string;
-    company_name: string;
-    source_type: string;
-    difficulty: string;
-    industry: string;
-  }[];
 }
 
 export async function searchGlobalAction(query: string): Promise<GlobalSearchResult> {
@@ -44,18 +32,14 @@ export async function searchGlobalAction(query: string): Promise<GlobalSearchRes
       ideas: [],
       projects: [],
       hackathons: [],
-      companies: [],
-      problems: [],
     };
   }
 
-  const [people, ideas, projects, hackathons, companies, problemsData] = await Promise.all([
+  const [people, ideas, projects, hackathons] = await Promise.all([
     getAllProfiles(query),
     getIdeas(undefined, "popular", query),
     getProjects(undefined, query),
     getHackathons("all"),
-    getCompanies({ query }),
-    getProblems({ query, limit: 5 }),
   ]);
 
   const q = query.toLowerCase();
@@ -97,21 +81,6 @@ export async function searchGlobalAction(query: string): Promise<GlobalSearchRes
       id: h.id,
       title: h.title,
       mode: h.mode || "Online",
-    })),
-    companies: companies.slice(0, 3).map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      name: c.name,
-      industry: c.industry,
-    })),
-    problems: problemsData.problems.slice(0, 5).map((pr) => ({
-      id: pr.id,
-      slug: pr.slug,
-      title: pr.title,
-      company_name: pr.company?.name || "Tech Ecosystem",
-      source_type: pr.source_type,
-      difficulty: pr.difficulty,
-      industry: pr.industry,
     })),
   };
 }

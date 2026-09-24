@@ -702,14 +702,7 @@ export async function deleteUserAccount(userId: string): Promise<{ success: bool
       console.error("Error reassigning hackathon organizer:", e);
     }
 
-    // 9. Clean up companies created by user if any
-    try {
-      await supabase.from("companies").delete().eq("owner_id", userId);
-    } catch (e) {
-      // Table or column might differ, safely ignored
-    }
-
-    // 10. Attempt hard delete on profiles table
+    // 9. Attempt hard delete on profiles table
     let hardDeleteSuccess = false;
     try {
       const { error: delErr } = await supabase

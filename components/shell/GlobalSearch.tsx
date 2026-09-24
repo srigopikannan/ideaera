@@ -9,13 +9,10 @@ import {
   Lightbulb,
   FolderGit2,
   Trophy,
-  Building2,
-  Target,
   Loader2,
   X,
   CornerDownLeft,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface GlobalSearchProps {
   isOpen: boolean;
@@ -26,16 +23,11 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [activeFilter, setActiveFilter] = React.useState<
-    "all" | "problems" | "companies" | "people" | "ideas" | "projects" | "hackathons"
-  >("all");
   const [results, setResults] = React.useState<GlobalSearchResult>({
     people: [],
     ideas: [],
     projects: [],
     hackathons: [],
-    companies: [],
-    problems: [],
   });
 
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -45,7 +37,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       setQuery("");
-      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [], problems: [] });
+      setResults({ people: [], ideas: [], projects: [], hackathons: [] });
     }
   }, [isOpen]);
 
@@ -70,7 +62,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   // Debounced search
   React.useEffect(() => {
     if (!query.trim()) {
-      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [], problems: [] });
+      setResults({ people: [], ideas: [], projects: [], hackathons: [] });
       setIsLoading(false);
       return;
     }
@@ -96,8 +88,6 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   };
 
   const hasResults =
-    (results.problems?.length || 0) > 0 ||
-    results.companies.length > 0 ||
     results.people.length > 0 ||
     results.ideas.length > 0 ||
     results.projects.length > 0 ||
@@ -121,7 +111,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Scan across the ecosystem (problems, companies, ideas, people, ventures)..."
+            placeholder="Scan across the ecosystem (ideas, people, ventures, hackathons)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 bg-transparent border-0 text-sm sm:text-base text-white placeholder:text-neutral-500 focus:outline-none font-light"
@@ -149,7 +139,6 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               <p className="tracking-wider uppercase">Type keywords to initiate a radar sweep.</p>
               <div className="flex justify-center gap-2 pt-3 flex-wrap">
                 <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#AI</span>
-                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Zoho</span>
                 <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Python</span>
                 <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Chennai</span>
                 <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#PostgreSQL</span>
@@ -163,83 +152,9 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             </div>
           )}
 
-          {/* Real-World Problems Results */}
-          {results.problems && results.problems.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-cyan-400">
-                <Target className="h-3.5 w-3.5" />
-                <span>Real-World Problems</span>
-              </div>
-              <div className="space-y-1">
-                {results.problems.map((prob) => (
-                  <button
-                    key={prob.id}
-                    onClick={() => handleNavigate(`/problems/${prob.slug || prob.id}`)}
-                    className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-light text-white group-hover:text-cyan-200 transition-colors">
-                          {prob.title}
-                        </p>
-                        <span
-                          className={cn(
-                            "text-[9px] px-1.5 py-0.5 rounded font-mono",
-                            prob.source_type === "official_company"
-                              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                              : "bg-white/5 text-neutral-400 border border-white/10"
-                          )}
-                        >
-                          {prob.source_type === "official_company" ? "Official" : "Community"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-neutral-400 mt-0.5 font-light">
-                        <span className="text-white/80">{prob.company_name}</span>
-                        <span>•</span>
-                        <span>{prob.industry}</span>
-                        <span>•</span>
-                        <span className="text-cyan-400/80">{prob.difficulty}</span>
-                      </div>
-                    </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Companies Results */}
-          {results.companies.length > 0 && (
-            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
-              <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-amber-400">
-                <Building2 className="h-3.5 w-3.5" />
-                <span>Ecosystem Companies</span>
-              </div>
-              <div className="space-y-1">
-                {results.companies.map((comp) => (
-                  <button
-                    key={comp.id}
-                    onClick={() => handleNavigate(`/companies/${comp.slug || comp.id}`)}
-                    className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
-                  >
-                    <div>
-                      <p className="text-sm font-light text-white group-hover:text-amber-200 transition-colors">
-                        {comp.name}
-                      </p>
-                      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
-                        {comp.industry}
-                      </span>
-                    </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Ideas Results */}
           {results.ideas.length > 0 && (
-            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+            <div className="space-y-1.5 pt-2">
               <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-indigo-400">
                 <Lightbulb className="h-3.5 w-3.5" />
                 <span>Ideas & Sparks</span>

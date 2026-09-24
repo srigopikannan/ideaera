@@ -3,6 +3,7 @@ import { getProfileByUsername, getCurrentUserProfile } from "@/services/profile"
 import { getProjectsByUserId } from "@/services/projects";
 import { getIdeasByUserId } from "@/services/ideas";
 import { getConnectedUsersForProfile } from "@/services/social";
+import { getUserBadgesWithProgress } from "@/services/badges";
 import { ProfileView } from "@/components/profile/ProfileView";
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }) {
@@ -33,10 +34,11 @@ export default async function ProfileByUsernamePage({
   const isCurrentUser = currentUser.username.toLowerCase() === profile.username.toLowerCase();
 
   // Fast targeted queries strictly for this profile
-  const [userProjects, userIdeas, connections] = await Promise.all([
+  const [userProjects, userIdeas, connections, badgesResult] = await Promise.all([
     getProjectsByUserId(profile.id),
     getIdeasByUserId(profile.id),
     getConnectedUsersForProfile(profile.id),
+    getUserBadgesWithProgress(profile.id, isCurrentUser),
   ]);
 
   return (
@@ -46,6 +48,7 @@ export default async function ProfileByUsernamePage({
       projects={userProjects}
       ideas={userIdeas}
       connections={connections.slice(0, 3)}
+      badgesResult={badgesResult}
     />
   );
 }

@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Profile, Project, Idea } from "@/types";
+import { UserBadgesResult } from "@/services/badges";
+import { AchievementsSection } from "@/components/profile/AchievementsSection";
 import { requestConnectionAction } from "@/app/(dashboard)/actions/social";
 import { deleteIdeaAction } from "@/app/(dashboard)/actions/ideas";
 import { deleteProjectAction } from "@/app/(dashboard)/actions/projects";
@@ -40,6 +42,7 @@ interface ProfileViewProps {
   projects?: Project[];
   ideas?: Idea[];
   connections?: Profile[];
+  badgesResult?: UserBadgesResult | null;
 }
 
 export function ProfileView({
@@ -48,6 +51,7 @@ export function ProfileView({
   projects = [],
   ideas = [],
   connections = [],
+  badgesResult,
 }: ProfileViewProps) {
   const router = useRouter();
   const [connectionStatus, setConnectionStatus] = React.useState(profile.connection_status || "none");
@@ -445,6 +449,9 @@ export function ProfileView({
 
         {/* Right Main Column: Ideas Posted & Projects */}
         <div className="lg:col-span-8 space-y-8">
+          {/* Achievements & Recognition Section */}
+          <AchievementsSection badgesResult={badgesResult} isCurrentUser={isCurrentUser} />
+
           {/* Ideas Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">

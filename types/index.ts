@@ -238,3 +238,53 @@ export interface College {
   updated_at?: string;
 }
 
+export type BadgeTier = 'bronze' | 'silver' | 'gold';
+
+export type BadgeCategory =
+  | 'idea_creator'
+  | 'problem_solver'
+  | 'team_player'
+  | 'hackathon_achiever'
+  | 'project_builder'
+  | 'collaborator'
+  | 'top_performer';
+
+export interface Badge {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  color: string;
+  tier: BadgeTier;
+  category: BadgeCategory;
+  criteria_type: string;
+  criteria_value: number;
+  criteria_description: string;
+  why_it_matters: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UserBadge {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  awarded_at: string;
+  awarded_by: string;
+  evidence?: Record<string, any>;
+  created_at?: string;
+  badge?: Badge;
+}
+
+export interface BadgeWithProgress extends Badge {
+  is_earned: boolean;
+  awarded_at?: string | null;
+  awarded_by?: string | null;
+  evidence?: Record<string, any>;
+  current_value: number;
+  percentage: number;
+}
+
+

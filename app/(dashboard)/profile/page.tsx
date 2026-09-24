@@ -2,6 +2,7 @@ import { getCurrentUserProfile } from "@/services/profile";
 import { getProjectsByUserId } from "@/services/projects";
 import { getIdeasByUserId } from "@/services/ideas";
 import { getConnectedUsersForProfile } from "@/services/social";
+import { getUserBadgesWithProgress } from "@/services/badges";
 import { ProfileView } from "@/components/profile/ProfileView";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +16,11 @@ export default async function CurrentUserProfilePage() {
   const currentUser = await getCurrentUserProfile();
 
   // Fast targeted queries strictly for this user instead of full table scans
-  const [userProjects, userIdeas, connections] = await Promise.all([
+  const [userProjects, userIdeas, connections, badgesResult] = await Promise.all([
     getProjectsByUserId(currentUser.id),
     getIdeasByUserId(currentUser.id),
     getConnectedUsersForProfile(currentUser.id),
+    getUserBadgesWithProgress(currentUser.id, true),
   ]);
 
   return (
@@ -28,6 +30,7 @@ export default async function CurrentUserProfilePage() {
       projects={userProjects}
       ideas={userIdeas}
       connections={connections}
+      badgesResult={badgesResult}
     />
   );
 }

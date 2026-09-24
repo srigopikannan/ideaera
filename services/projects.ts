@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Project } from "@/types";
 import { slugify } from "@/lib/utils";
+import { evaluateUserBadges } from "@/services/badges";
 
 function mapProject(p: any): Project {
   let description = p.description || "";
@@ -171,6 +172,11 @@ export async function createProject(data: {
   if (error || !inserted) {
     throw new Error(error?.message || "Failed to create project.");
   }
+
+  // Trigger badge evaluation asynchronously
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge evaluation on createProject error:", err)
+  );
 
   return mapProject(inserted);
 }

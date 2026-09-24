@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Idea, IdeaComment } from "@/types";
 import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
+import { evaluateUserBadges } from "@/services/badges";
 
 function mapIdea(raw: any, isLiked: boolean = false): Idea {
   const authorProfile = raw.creator || raw.author || null;
@@ -210,6 +211,11 @@ export async function createIdea(data: {
   if (error || !inserted) {
     throw new Error(error?.message || "Failed to create idea.");
   }
+
+  // Trigger badge evaluation asynchronously
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge evaluation on createIdea error:", err)
+  );
 
   return mapIdea(inserted);
 }

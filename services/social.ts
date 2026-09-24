@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles, getCurrentUserProfile } from "@/services/profile";
 import { Connection, Notification, NotificationType, MatchRecommendation, Profile } from "@/types";
+import { evaluateUserBadges } from "@/services/badges";
 
 export async function getConnections(): Promise<{
   all: Connection[];
@@ -230,6 +231,11 @@ export async function sendConnectionRequest(
     });
   }
 
+  if (isPublic) {
+    evaluateUserBadges(user.id).catch(console.warn);
+    evaluateUserBadges(targetUserId).catch(console.warn);
+  }
+
   return inserted;
 }
 
@@ -284,6 +290,11 @@ export async function updateConnectionStatus(
 
   // Synchronize and update all notifications associated with this connection
   await syncConnectionNotifications(connectionId, status, connection.requester_id, connection.receiver_id);
+
+  if (status === "accepted") {
+    evaluateUserBadges(connection.requester_id).catch(console.warn);
+    evaluateUserBadges(connection.receiver_id).catch(console.warn);
+  }
 }
 
 /**

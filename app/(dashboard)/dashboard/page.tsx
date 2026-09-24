@@ -1,4 +1,4 @@
-import { getCurrentUserProfile, getAllProfiles } from "@/services/profile";
+import { getCurrentUserProfile, getRecommendedPeople } from "@/services/profile";
 import { getIdeas } from "@/services/ideas";
 import { getHackathons } from "@/services/hackathons";
 import { LivingIdeaSpace } from "@/components/dashboard/LivingIdeaSpace";
@@ -6,15 +6,15 @@ import { LivingIdeaSpace } from "@/components/dashboard/LivingIdeaSpace";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [currentUser, people, ideas, hackathons] = await Promise.all([
-    getCurrentUserProfile(),
-    getAllProfiles(),
+  const currentUser = await getCurrentUserProfile();
+  const currentUserId = currentUser?.id || "";
+
+  // Parallel fetching of only the data required for the dashboard
+  const [recommendedPeople, ideas, hackathons] = await Promise.all([
+    getRecommendedPeople(6, currentUserId),
     getIdeas(undefined, "trending"),
     getHackathons("upcoming"),
   ]);
-
-  const currentUserId = currentUser?.id || "";
-  const recommendedPeople = people.filter((p) => p.id !== currentUserId);
 
   return (
     <LivingIdeaSpace

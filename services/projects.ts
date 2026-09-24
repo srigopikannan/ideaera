@@ -55,12 +55,32 @@ export async function getProjects(status?: string, query?: string): Promise<Proj
       qb = qb.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
     }
 
-    const { data, error } = await qb.order("created_at", { ascending: false });
+    const { data, error } = await qb.order("created_at", { ascending: false }).limit(50);
     if (data && !error) {
       return data.map(mapProject);
     }
   } catch (err) {
     console.error("Error in getProjects:", err);
+  }
+
+  return [];
+}
+
+export async function getProjectsByUserId(userId: string): Promise<Project[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*, owner:profiles!owner_id(id, full_name, username, avatar_url)")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (data && !error) {
+      return data.map(mapProject);
+    }
+  } catch (err) {
+    console.error("Error in getProjectsByUserId:", err);
   }
 
   return [];

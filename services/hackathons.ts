@@ -135,10 +135,25 @@ function parseHackathonData(h: any): Hackathon {
   };
 }
 
+let hackathonsCache: { all: Hackathon[]; timestamp: number } | null = null;
+const HACKATHONS_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function invalidateHackathonsCache() {
+  hackathonsCache = null;
+}
+
 export async function getHackathons(filter: string = "all"): Promise<Hackathon[]> {
   try {
+    // 1. Check in-memory cache
+    if (hackathonsCache && Date.now() - hackathonsCache.timestamp < HACKATHONS_CACHE_TTL) {
+      const cached = hackathonsCache.all;
+      if (filter === "online") return cached.filter((h) => h.mode?.toLowerCase() === "online");
+      if (filter === "in-person") return cached.filter((h) => h.mode?.toLowerCase() !== "online");
+      return cached;
+    }
+
     const supabase = await createClient();
-    let qb = supabase.from("hackathons").select("*, organizer_profile:profiles!organizer_id(*)");
+    let qb = supabase.from("hackathons").select("*, organizer_profile:profiles!organizer_id(id, full_name, username, avatar_url)");
 
     if (filter === "online") {
       qb = qb.ilike("location", "%online%");
@@ -157,7 +172,7 @@ export async function getHackathons(filter: string = "all"): Promise<Hackathon[]
         "Global": 4,
       };
 
-      return parsed.sort((a, b) => {
+      const sorted = parsed.sort((a, b) => {
         // 1. Ongoing / Live hackathons first
         if (a.status === "ongoing" && b.status !== "ongoing") return -1;
         if (b.status === "ongoing" && a.status !== "ongoing") return 1;
@@ -188,6 +203,12 @@ export async function getHackathons(filter: string = "all"): Promise<Hackathon[]
         const regB = b.registration_deadline ? new Date(b.registration_deadline).getTime() : Infinity;
         return regA - regB;
       });
+
+      if (filter === "all") {
+        hackathonsCache = { all: sorted, timestamp: Date.now() };
+      }
+
+      return sorted;
     }
   } catch (err) {
     console.error("Error fetching hackathons:", err);

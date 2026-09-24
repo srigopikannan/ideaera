@@ -141,6 +141,7 @@ export function AppHeader() {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   onClick={() => setIsMobileNavOpen(false)}
                   className="text-2xl font-light tracking-tight text-neutral-300 hover:text-white transition-colors"
                 >

@@ -1,7 +1,7 @@
 import { getCurrentUserProfile } from "@/services/profile";
-import { getProjects } from "@/services/projects";
-import { getIdeas } from "@/services/ideas";
-import { getAllProfiles } from "@/services/profile";
+import { getProjectsByUserId } from "@/services/projects";
+import { getIdeasByUserId } from "@/services/ideas";
+import { getConnectedUsersForProfile } from "@/services/social";
 import { ProfileView } from "@/components/profile/ProfileView";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +13,13 @@ export const metadata = {
 
 export default async function CurrentUserProfilePage() {
   const currentUser = await getCurrentUserProfile();
-  const [allProjects, allIdeas, allPeople] = await Promise.all([
-    getProjects(),
-    getIdeas(),
-    getAllProfiles(),
-  ]);
 
-  const userProjects = allProjects.filter(
-    (p) => p.owner_id === currentUser.id || p.members?.some((m) => m.user_id === currentUser.id)
-  );
-  const userIdeas = allIdeas.filter((i) => i.author_id === currentUser.id);
-  const connections = allPeople.filter(
-    (p) => p.id !== currentUser.id && p.connection_status === "connected"
-  );
+  // Fast targeted queries strictly for this user instead of full table scans
+  const [userProjects, userIdeas, connections] = await Promise.all([
+    getProjectsByUserId(currentUser.id),
+    getIdeasByUserId(currentUser.id),
+    getConnectedUsersForProfile(currentUser.id),
+  ]);
 
   return (
     <ProfileView

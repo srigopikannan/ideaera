@@ -277,7 +277,7 @@ export async function getAllProfiles(
       );
     }
 
-    const { data, error } = await queryBuilder.order("created_at", { ascending: false });
+    const { data, error } = await queryBuilder.order("created_at", { ascending: false }).limit(60);
     if (data && !error) {
       let results = data
         .filter((d) => !isDeletedProfile(d))
@@ -358,6 +358,34 @@ export async function getAllProfiles(
     }
   } catch (err) {
     console.error("Error in getAllProfiles:", err);
+  }
+
+  return [];
+}
+
+export async function getRecommendedPeople(
+  limit: number = 6,
+  excludeUserId?: string
+): Promise<Profile[]> {
+  try {
+    const supabase = await createClient();
+    let qb = supabase
+      .from("profiles")
+      .select("id, full_name, username, headline, bio, avatar_url, skills, city, state, country, show_location, college, availability")
+      .order("created_at", { ascending: false });
+
+    if (excludeUserId) {
+      qb = qb.neq("id", excludeUserId);
+    }
+
+    const { data, error } = await qb.limit(limit);
+    if (data && !error) {
+      return data
+        .filter((d) => !isDeletedProfile(d))
+        .map((d) => formatProfile(d, excludeUserId));
+    }
+  } catch (err) {
+    console.error("Error in getRecommendedPeople:", err);
   }
 
   return [];

@@ -60,10 +60,14 @@ export function AppSidebar() {
   });
 
   React.useEffect(() => {
+    const supabase = createClient();
+    let isMounted = true;
+
     const fetchUser = async () => {
       try {
-        const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
+
+        if (!isMounted) return;
 
         if (user) {
           const { data: profile } = await supabase
@@ -71,6 +75,8 @@ export function AppSidebar() {
             .select("id, full_name, username, avatar_url")
             .eq("id", user.id)
             .maybeSingle();
+
+          if (!isMounted) return;
 
           if (profile) {
             setCurrentUser({
@@ -95,8 +101,18 @@ export function AppSidebar() {
         }
       } catch {}
     };
+
     fetchUser();
-  }, [pathname]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchUser();
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -131,6 +147,7 @@ export function AppSidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-xl text-xs uppercase tracking-[0.16em] font-medium transition-all",
                     active
@@ -164,6 +181,7 @@ export function AppSidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-xl text-xs uppercase tracking-[0.16em] font-medium transition-all",
                     active
@@ -197,6 +215,7 @@ export function AppSidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-xl text-xs uppercase tracking-[0.16em] font-medium transition-all",
                     active

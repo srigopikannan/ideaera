@@ -79,7 +79,7 @@ export async function getIdeas(
       qb = qb.or(`title.ilike.%${query}%,description.ilike.%${query}%,problem.ilike.%${query}%,solution.ilike.%${query}%`);
     }
 
-    qb = qb.order("created_at", { ascending: false });
+    qb = qb.order("created_at", { ascending: false }).limit(50);
 
     const { data, error } = await qb;
     if (data && !error) {
@@ -87,6 +87,26 @@ export async function getIdeas(
     }
   } catch (err) {
     console.error("Error in getIdeas:", err);
+  }
+
+  return [];
+}
+
+export async function getIdeasByUserId(userId: string): Promise<Idea[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("ideas")
+      .select("*, creator:profiles!creator_id(id, full_name, username, avatar_url)")
+      .eq("creator_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (data && !error) {
+      return data.map((idea) => mapIdea(idea, false));
+    }
+  } catch (err) {
+    console.error("Error in getIdeasByUserId:", err);
   }
 
   return [];

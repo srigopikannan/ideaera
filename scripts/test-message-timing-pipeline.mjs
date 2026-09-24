@@ -72,8 +72,9 @@ async function run() {
 
     // 2. Real User Flow Verification
     console.log("\n--- 2. VERIFYING MESSAGE LIFECYCLE (SENT -> DELIVERED -> SEEN) ---");
-    const userA = "d1aabec0-3b89-4c1d-a33d-a6573224f5c2"; // srigopikannan
-    const userB = "6a149eed-c243-48f3-b61c-7c2575567979"; // gopikannan116
+    const { rows: testProfiles } = await client.query("SELECT id, username FROM public.profiles ORDER BY created_at ASC LIMIT 2");
+    const userA = testProfiles[0].id;
+    const userB = testProfiles[1].id;
     const convId = [userA, userB].sort().join(":");
     const testContent = `Automated Pipeline Verification ${Date.now()}`;
 

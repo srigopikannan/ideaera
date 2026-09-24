@@ -36,6 +36,33 @@ export async function getConnections(): Promise<{
   };
 }
 
+export async function getConnectedUsersForProfile(userId: string): Promise<Profile[]> {
+  try {
+    const supabase = await createClient();
+    const { data: conns } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id, requester:profiles!requester_id(id, full_name, username, headline, avatar_url, skills), receiver:profiles!receiver_id(id, full_name, username, headline, avatar_url, skills)")
+      .eq("status", "accepted")
+      .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+      .limit(20);
+
+    if (conns) {
+      return conns.map((c: any) => {
+        const rawProfile = c.requester_id === userId ? c.receiver : c.requester;
+        if (!rawProfile) return null;
+        return {
+          ...rawProfile,
+          connection_status: "connected" as const,
+        };
+      }).filter(Boolean) as Profile[];
+    }
+  } catch (err) {
+    console.error("Error in getConnectedUsersForProfile:", err);
+  }
+
+  return [];
+}
+
 export async function sendConnectionRequest(
   targetUserId: string,
   connectionType: "public" | "private" = "private"
@@ -705,45 +732,42 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
   if (candidates.length === 0) return [];
 
   const supabase = await createClient();
-  const candidateIds = candidates.map((c) => c.id);
+  const candidateProfiles = candidates.slice(0, 30);
+  const candidateIds = candidateProfiles.map((c) => c.id);
 
-  // 1. Fetch user projects from projects table
   const projectsByOwner: Record<string, { id: string; name: string; slug?: string }[]> = {};
+  const interestsByCreator: Record<string, string[]> = {};
+
   if (candidateIds.length > 0) {
     try {
-      const { data: projs } = await supabase
-        .from("projects")
-        .select("id, name, slug, owner_id")
-        .in("owner_id", candidateIds);
-      if (projs) {
-        projs.forEach((p) => {
+      const [projsRes, ideasRes] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("id, name, owner_id")
+          .in("owner_id", candidateIds),
+        supabase
+          .from("ideas")
+          .select("creator_id, category, title")
+          .in("creator_id", candidateIds),
+      ]);
+
+      if (projsRes.data) {
+        projsRes.data.forEach((p) => {
           if (!projectsByOwner[p.owner_id]) projectsByOwner[p.owner_id] = [];
-          projectsByOwner[p.owner_id].push({ id: p.id, name: p.name, slug: p.slug || p.id });
+          projectsByOwner[p.owner_id].push({ id: p.id, name: p.name, slug: p.id });
         });
       }
-    } catch (projErr) {
-      console.error("Error fetching candidate projects:", projErr);
-    }
-  }
 
-  // 2. Fetch candidate domain interests from published ideas
-  const interestsByCreator: Record<string, string[]> = {};
-  if (candidateIds.length > 0) {
-    try {
-      const { data: ideas } = await supabase
-        .from("ideas")
-        .select("creator_id, category, title")
-        .in("creator_id", candidateIds);
-      if (ideas) {
-        ideas.forEach((i) => {
+      if (ideasRes.data) {
+        ideasRes.data.forEach((i) => {
           if (!interestsByCreator[i.creator_id]) interestsByCreator[i.creator_id] = [];
           if (i.category && !interestsByCreator[i.creator_id].includes(i.category)) {
             interestsByCreator[i.creator_id].push(i.category);
           }
         });
       }
-    } catch (ideaErr) {
-      console.error("Error fetching candidate idea domains:", ideaErr);
+    } catch (err) {
+      console.error("Error in getMatchRecommendations parallel data fetch:", err);
     }
   }
 
@@ -755,7 +779,7 @@ export async function getMatchRecommendations(currentProfile?: Profile | null): 
     .split(/\W+/)
     .filter((w) => w.length > 3);
 
-  const recommendations: MatchRecommendation[] = candidates.map((candidate) => {
+  const recommendations: MatchRecommendation[] = candidateProfiles.map((candidate) => {
     let candSkills = candidate.skills && candidate.skills.length > 0 ? candidate.skills : [];
     if (candSkills.length === 0) {
       const lowerBio = `${candidate.headline || ""} ${candidate.bio || ""}`.toLowerCase();

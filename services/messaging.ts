@@ -19,7 +19,7 @@ export async function getConversations(): Promise<Conversation[]> {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+          "id, conversation_id, sender_id, receiver_id, content, created_at, delivered_at, read_at, is_read, sender:profiles!sender_id(id, full_name, username, avatar_url), receiver:profiles!receiver_id(id, full_name, username, avatar_url)"
         )
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order("created_at", { ascending: false });
@@ -38,7 +38,7 @@ export async function getConversations(): Promise<Conversation[]> {
           if (!convMap.has(partner.id)) {
             convMap.set(partner.id, {
               other_user: partner,
-              last_message: msg,
+              last_message: msg as unknown as Message,
               unread_count: isUnread ? 1 : 0,
             });
           } else if (isUnread) {
@@ -67,7 +67,7 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+          "id, conversation_id, sender_id, receiver_id, content, created_at, delivered_at, read_at, is_read, sender:profiles!sender_id(id, full_name, username, avatar_url), receiver:profiles!receiver_id(id, full_name, username, avatar_url)"
         )
         .or(
           `and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`
@@ -92,7 +92,7 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
           console.error("Error marking messages as read in getMessages:", markErr);
         }
 
-        return data;
+        return data as unknown as Message[];
       }
     }
   } catch (err) {
@@ -130,7 +130,7 @@ export async function sendMessage(receiverId: string, content: string): Promise<
       read_at: null,
     })
     .select(
-      "*, sender:profiles!sender_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))), receiver:profiles!receiver_id(*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*)))"
+      "id, conversation_id, sender_id, receiver_id, content, created_at, delivered_at, read_at, is_read, sender:profiles!sender_id(id, full_name, username, avatar_url), receiver:profiles!receiver_id(id, full_name, username, avatar_url)"
     )
     .single();
 
@@ -160,7 +160,7 @@ export async function sendMessage(receiverId: string, content: string): Promise<
     console.error("Error creating message notification:", notifErr);
   }
 
-  return inserted;
+  return inserted as unknown as Message;
 }
 
 export async function markMessagesDelivered(messageIds?: string[]): Promise<boolean> {
@@ -219,15 +219,26 @@ export async function markConversationAsRead(otherUserId: string): Promise<boole
 
 export async function getAllMessageableUsers(currentUserId?: string): Promise<Profile[]> {
   try {
-    const profiles = await getAllProfiles();
+    const supabase = await createClient();
+    let qb = supabase
+      .from("profiles")
+      .select("id, full_name, username, headline, bio, avatar_url, skills, city, state, country, show_location")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
     if (currentUserId) {
-      return profiles.filter((p) => p.id !== currentUserId && !isDeletedProfile(p));
+      qb = qb.neq("id", currentUserId);
     }
-    return profiles.filter((p) => !isDeletedProfile(p));
+
+    const { data, error } = await qb;
+    if (data && !error) {
+      return data.filter((p) => !isDeletedProfile(p)).map((p) => formatProfile(p, currentUserId));
+    }
   } catch (err) {
     console.error("Error in getAllMessageableUsers:", err);
-    return [];
   }
+
+  return [];
 }
 
 export async function getUserForMessaging(identifier: string): Promise<Profile | null> {

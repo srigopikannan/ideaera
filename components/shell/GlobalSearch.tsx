@@ -10,15 +10,11 @@ import {
   FolderGit2,
   Trophy,
   Building2,
+  Target,
   Loader2,
   X,
   CornerDownLeft,
-  Sparkles,
-  GraduationCap,
-  MapPin,
-  Hash,
 } from "lucide-react";
-import { Github, Linkedin } from "@/components/ui/brand-icons";
 import { cn } from "@/lib/utils";
 
 interface GlobalSearchProps {
@@ -30,13 +26,16 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [activeFilter, setActiveFilter] = React.useState<"all" | "people" | "ideas" | "projects" | "hackathons">("all");
+  const [activeFilter, setActiveFilter] = React.useState<
+    "all" | "problems" | "companies" | "people" | "ideas" | "projects" | "hackathons"
+  >("all");
   const [results, setResults] = React.useState<GlobalSearchResult>({
     people: [],
     ideas: [],
     projects: [],
     hackathons: [],
     companies: [],
+    problems: [],
   });
 
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -46,7 +45,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       setQuery("");
-      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [] });
+      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [], problems: [] });
     }
   }, [isOpen]);
 
@@ -71,7 +70,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   // Debounced search
   React.useEffect(() => {
     if (!query.trim()) {
-      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [] });
+      setResults({ people: [], ideas: [], projects: [], hackathons: [], companies: [], problems: [] });
       setIsLoading(false);
       return;
     }
@@ -97,11 +96,12 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   };
 
   const hasResults =
+    (results.problems?.length || 0) > 0 ||
+    results.companies.length > 0 ||
     results.people.length > 0 ||
     results.ideas.length > 0 ||
     results.projects.length > 0 ||
-    results.hackathons.length > 0 ||
-    results.companies.length > 0;
+    results.hackathons.length > 0;
 
   if (!isOpen) return null;
 
@@ -121,7 +121,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Scan across the constellation (ideas, peers, ventures, sprints)..."
+            placeholder="Scan across the ecosystem (problems, companies, ideas, people, ventures)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 bg-transparent border-0 text-sm sm:text-base text-white placeholder:text-neutral-500 focus:outline-none font-light"
@@ -149,9 +149,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               <p className="tracking-wider uppercase">Type keywords to initiate a radar sweep.</p>
               <div className="flex justify-center gap-2 pt-3 flex-wrap">
                 <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#AI</span>
-                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Autonomous</span>
-                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Rust</span>
-                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Robotics</span>
+                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Zoho</span>
+                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Python</span>
+                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#Chennai</span>
+                <span className="px-3 py-1 rounded-full bg-white/[0.03] border border-white/10 text-neutral-400">#PostgreSQL</span>
               </div>
             </div>
           )}
@@ -162,9 +163,83 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             </div>
           )}
 
+          {/* Real-World Problems Results */}
+          {results.problems && results.problems.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-cyan-400">
+                <Target className="h-3.5 w-3.5" />
+                <span>Real-World Problems</span>
+              </div>
+              <div className="space-y-1">
+                {results.problems.map((prob) => (
+                  <button
+                    key={prob.id}
+                    onClick={() => handleNavigate(`/problems/${prob.slug || prob.id}`)}
+                    className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-light text-white group-hover:text-cyan-200 transition-colors">
+                          {prob.title}
+                        </p>
+                        <span
+                          className={cn(
+                            "text-[9px] px-1.5 py-0.5 rounded font-mono",
+                            prob.source_type === "official_company"
+                              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                              : "bg-white/5 text-neutral-400 border border-white/10"
+                          )}
+                        >
+                          {prob.source_type === "official_company" ? "Official" : "Community"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-neutral-400 mt-0.5 font-light">
+                        <span className="text-white/80">{prob.company_name}</span>
+                        <span>•</span>
+                        <span>{prob.industry}</span>
+                        <span>•</span>
+                        <span className="text-cyan-400/80">{prob.difficulty}</span>
+                      </div>
+                    </div>
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Companies Results */}
+          {results.companies.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-amber-400">
+                <Building2 className="h-3.5 w-3.5" />
+                <span>Ecosystem Companies</span>
+              </div>
+              <div className="space-y-1">
+                {results.companies.map((comp) => (
+                  <button
+                    key={comp.id}
+                    onClick={() => handleNavigate(`/companies/${comp.slug || comp.id}`)}
+                    className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.06] border border-transparent hover:border-white/10 text-left transition-all group"
+                  >
+                    <div>
+                      <p className="text-sm font-light text-white group-hover:text-amber-200 transition-colors">
+                        {comp.name}
+                      </p>
+                      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                        {comp.industry}
+                      </span>
+                    </div>
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Ideas Results */}
           {results.ideas.length > 0 && (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
               <div className="flex items-center gap-1.5 px-3 text-[10px] font-mono uppercase tracking-widest text-indigo-400">
                 <Lightbulb className="h-3.5 w-3.5" />
                 <span>Ideas & Sparks</span>
@@ -191,7 +266,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                         {idea.category}
                       </span>
                     </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
                   </button>
                 ))}
               </div>
@@ -221,32 +296,11 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-white group-hover:text-cyan-200 transition-colors truncate">
-                            {person.name}
-                          </p>
-                          <span className="text-[10px] font-mono text-neutral-500">
-                            @{person.username}
-                          </span>
-                        </div>
-                        {person.headline && (
-                          <p className="text-[11px] font-mono text-neutral-400 truncate">
-                            {person.headline}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] font-mono text-neutral-500">
-                          {person.college && (
-                            <span className="flex items-center gap-1 text-neutral-400">
-                              <GraduationCap className="h-3 w-3 text-indigo-400" />
-                              <span className="truncate max-w-[160px]">{person.college}</span>
-                            </span>
-                          )}
-                          {(person.city || person.location) && (
-                            <span className="flex items-center gap-1 text-neutral-400">
-                              <MapPin className="h-3 w-3 text-cyan-400" />
-                              <span className="truncate max-w-[120px]">{person.city || person.location}</span>
-                            </span>
-                          )}
+                        <p className="text-sm font-light text-white group-hover:text-cyan-200 transition-colors truncate">
+                          {person.name}
+                        </p>
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400 truncate">
+                          <span>@{person.username}</span>
                           {person.skills && person.skills.length > 0 && (
                             <span className="text-indigo-300">
                               {person.skills.slice(0, 2).join(", ")}
@@ -284,7 +338,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                         {proj.description}
                       </p>
                     </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
                   </button>
                 ))}
               </div>
@@ -313,7 +367,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                         {hack.mode}
                       </span>
                     </div>
-                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <CornerDownLeft className="h-3.5 w-3.5 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
                   </button>
                 ))}
               </div>

@@ -58,7 +58,7 @@ export default function CreateCompanyPage() {
     setIsLoading(true);
 
     try {
-      const created = await createCompanyAction({
+      const res = await createCompanyAction({
         name,
         description,
         industry,
@@ -68,9 +68,15 @@ export default function CreateCompanyPage() {
         size,
       });
 
+      if (!res.success || !res.company) {
+        setError(res.error || "Failed to register company.");
+        setIsLoading(false);
+        return;
+      }
+
       setSuccess(true);
       setTimeout(() => {
-        router.push(`/companies/${created.slug}`);
+        router.push(`/companies/${res.company.slug}`);
         router.refresh();
       }, 1200);
     } catch (err: any) {

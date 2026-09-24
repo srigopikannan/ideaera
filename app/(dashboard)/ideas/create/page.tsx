@@ -2,9 +2,26 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createIdeaAction } from "@/app/(dashboard)/actions/ideas";
-import { ArrowLeft, Sparkles, Send, Tag, Layers, Compass } from "lucide-react";
+import { getProblemByIdOrSlugAction } from "@/app/(dashboard)/actions/problems";
+import { CompanyProblem } from "@/types";
+import {
+  ArrowLeft,
+  Sparkles,
+  Send,
+  Tag,
+  Layers,
+  Compass,
+  Target,
+  ShieldCheck,
+  Eye,
+  Lock,
+  Globe,
+  Users,
+  Shield,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -16,17 +33,78 @@ const CATEGORIES = [
   { id: "Web3 & Open Source", color: "168, 85, 247" }, // Purple
 ];
 
-export default function CreateIdeaPage() {
+const VISIBILITIES: {
+  id: "public" | "community" | "selected" | "private";
+  label: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  {
+    id: "public",
+    label: "Public",
+    desc: "Visible in open ecosystem directory & problem showcase",
+    icon: Globe,
+  },
+  {
+    id: "community",
+    label: "Community",
+    desc: "Visible to verified IdeaEra innovators",
+    icon: Users,
+  },
+  {
+    id: "selected",
+    label: "Selected Access",
+    desc: "Visible only to invited collaborators & teammates",
+    icon: Eye,
+  },
+  {
+    id: "private",
+    label: "Private",
+    desc: "Strictly confidential — visible only to you",
+    icon: Lock,
+  },
+];
+
+function CreateIdeaContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paramProblemId = searchParams.get("problem_id");
+  const paramCompanyId = searchParams.get("company_id");
+
+  const [linkedProblem, setLinkedProblem] = React.useState<CompanyProblem | null>(null);
   const [title, setTitle] = React.useState("");
   const [category, setCategory] = React.useState(CATEGORIES[0].id);
   const [tags, setTags] = React.useState("");
   const [problem, setProblem] = React.useState("");
   const [solution, setSolution] = React.useState("");
+  const [visibility, setVisibility] = React.useState<"public" | "community" | "selected" | "private">("public");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  // If problem_id is in query params, fetch problem details to pre-seed form
+  React.useEffect(() => {
+    if (paramProblemId) {
+      getProblemByIdOrSlugAction(paramProblemId).then((res) => {
+        if (res) {
+          setLinkedProblem(res);
+          if (res.industry) {
+            const matchingCat = CATEGORIES.find(
+              (c) => c.id.toLowerCase() === res.industry.toLowerCase()
+            );
+            if (matchingCat) setCategory(matchingCat.id);
+          }
+          if (res.required_skills && res.required_skills.length > 0) {
+            setTags(res.required_skills.slice(0, 4).join(", "));
+          }
+          if (res.summary) {
+            setProblem(res.summary);
+          }
+        }
+      });
+    }
+  }, [paramProblemId]);
 
   const activeCategoryConfig = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
 
@@ -61,7 +139,6 @@ export default function CreateIdeaPage() {
     handleResize();
     window.addEventListener("resize", handleResize);
 
-    // Particles system
     const particleCount = 45;
     const particles = Array.from({ length: particleCount }, (_, i) => ({
       angle: (i / particleCount) * Math.PI * 2,
@@ -81,11 +158,8 @@ export default function CreateIdeaPage() {
       const cx = width / 2;
       const cy = height / 2;
 
-      const hasTitle = title.trim().length > 0;
-      const textDensity = Math.min((problem.length + solution.length) / 100, 1);
       const col = activeCategoryConfig.color;
 
-      // 1. Ignition Shockwave on Submit
       if (isSubmitting) {
         const wave = ((t * 80) % 180) + 10;
         ctx.save();
@@ -97,106 +171,16 @@ export default function CreateIdeaPage() {
         ctx.restore();
       }
 
-      // 2. Ambient Core Glow
-      const glowR = (hasTitle ? 55 + textDensity * 40 : 25) * (isSubmitting ? 1.5 : 1);
-      const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-      glowGrad.addColorStop(0, "rgba(" + col + ", " + (hasTitle ? 0.4 : 0.15) + ")");
-      glowGrad.addColorStop(0.7, "rgba(" + col + ", " + (hasTitle ? 0.12 : 0.03) + ")");
-      glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = glowGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
-      ctx.fill();
+      particles.forEach((p) => {
+        p.angle += p.speed;
+        const x = cx + Math.cos(p.angle) * p.dist;
+        const y = cy + Math.sin(p.angle) * p.dist;
 
-      // 3. Stardust Accretion Particles
-      particles.forEach((pt, i) => {
-        pt.angle += pt.speed * (hasTitle ? 1.4 : 0.5);
-        const dist = (pt.baseDist + Math.sin(t * 2 + i) * 6) * (hasTitle ? 1 + textDensity * 0.3 : 0.8);
-        const px = cx + Math.cos(pt.angle) * dist;
-        const py = cy + Math.sin(pt.angle) * (dist * 0.45);
-
-        ctx.save();
         ctx.beginPath();
-        ctx.arc(px, py, pt.size, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(" + col + ", " + (pt.alpha * (hasTitle ? 0.8 : 0.3)) + ")";
-        ctx.shadowColor = "rgba(" + col + ", 0.7)";
-        ctx.shadowBlur = 4;
+        ctx.arc(x, y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(" + col + ", " + p.alpha + ")";
         ctx.fill();
-        ctx.restore();
       });
-
-      // 4. Gyroscopic Coordinate Rings (Awaken when title exists)
-      if (hasTitle) {
-        const ringR = 48 + textDensity * 12 + Math.sin(t * 1.5) * 2;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, ringR, ringR * 0.38, t * 0.8, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(" + col + ", 0.5)";
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([4, 5]);
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, ringR * 1.2, ringR * 0.42, -t * 0.6 + 1.2, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 5. Tag Satellites
-      tagList.slice(0, 6).forEach((tag, idx) => {
-        const satAngle = (idx / Math.min(tagList.length, 6)) * Math.PI * 2 + t * 0.3;
-        const satDist = 85 + (idx % 2) * 15;
-        const sx = cx + Math.cos(satAngle) * satDist;
-        const sy = cy + Math.sin(satAngle) * (satDist * 0.45);
-
-        // Tether line
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(sx, sy);
-        ctx.strokeStyle = "rgba(" + col + ", 0.25)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
-        ctx.stroke();
-
-        // Node
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "rgba(" + col + ", 0.8)";
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // 6. Central Seed Nucleus (Mass grows with title & description)
-      const coreR = (hasTitle ? 16 + textDensity * 10 : 8) * (isSubmitting ? 1.3 : 1);
-      const coreGrad = ctx.createRadialGradient(
-        cx - coreR * 0.25,
-        cy - coreR * 0.25,
-        1,
-        cx,
-        cy,
-        coreR
-      );
-      coreGrad.addColorStop(0, "#ffffff");
-      coreGrad.addColorStop(0.35, "rgba(" + col + ", 0.95)");
-      coreGrad.addColorStop(0.8, "rgba(" + col + ", 0.5)");
-      coreGrad.addColorStop(1, "rgba(10, 12, 19, 0.4)");
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-      ctx.fillStyle = coreGrad;
-      ctx.shadowColor = "rgba(" + col + ", 0.9)";
-      ctx.shadowBlur = 18;
-      ctx.fill();
-      ctx.restore();
 
       animationId = requestAnimationFrame(render);
     };
@@ -230,6 +214,16 @@ export default function CreateIdeaPage() {
     formData.append("problem", effectiveProblem);
     formData.append("solution", effectiveSolution);
     formData.append("description", effectiveDescription);
+    formData.append("visibility", visibility);
+    if (paramProblemId) {
+      formData.append("problem_id", paramProblemId);
+    }
+    if (paramCompanyId || linkedProblem?.company_id) {
+      formData.append("company_id", paramCompanyId || linkedProblem?.company_id || "");
+    }
+    if (tags.trim()) {
+      formData.append("skills_needed", tags.trim());
+    }
 
     try {
       const res = await createIdeaAction(formData);
@@ -239,7 +233,11 @@ export default function CreateIdeaPage() {
         return;
       }
       setTimeout(() => {
-        router.push("/ideas");
+        if (paramProblemId && linkedProblem) {
+          router.push(`/problems/${linkedProblem.slug || paramProblemId}`);
+        } else {
+          router.push("/ideas");
+        }
       }, 450);
     } catch (err: any) {
       setError(err?.message || "Failed to ignite concept.");
@@ -252,11 +250,11 @@ export default function CreateIdeaPage() {
       {/* Top Bar Navigation */}
       <div className="flex items-center justify-between z-20">
         <Link
-          href="/ideas"
+          href={paramProblemId ? `/problems/${paramProblemId}` : "/ideas"}
           className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-neutral-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Exit Idea Lab</span>
+          <span>{paramProblemId ? "Back to Problem" : "Exit Idea Lab"}</span>
         </Link>
 
         <div className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1 rounded-full border border-white/10 bg-[#0a0c13]/80 backdrop-blur-md">
@@ -268,7 +266,33 @@ export default function CreateIdeaPage() {
       </div>
 
       {/* Main Idea Lab Studio Form */}
-      <form onSubmit={handleSubmit} className="relative z-10 max-w-4xl w-full mx-auto space-y-6 sm:space-y-8 my-auto py-6 sm:py-8">
+      <form
+        onSubmit={handleSubmit}
+        className="relative z-10 max-w-4xl w-full mx-auto space-y-6 sm:space-y-8 my-auto py-6 sm:py-8"
+      >
+        {/* Linked Problem Banner */}
+        {linkedProblem && (
+          <div className="p-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/30">
+                <Target className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-semibold block">
+                  Solving Real-World Challenge
+                </span>
+                <span className="text-white font-medium line-clamp-1">
+                  {linkedProblem.title}
+                </span>
+              </div>
+            </div>
+
+            <span className="text-[11px] font-mono text-cyan-300/80 shrink-0">
+              {linkedProblem.company?.name}
+            </span>
+          </div>
+        )}
+
         {/* Error Alert */}
         {error && (
           <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-mono text-center">
@@ -283,7 +307,7 @@ export default function CreateIdeaPage() {
           </span>
           <input
             type="text"
-            placeholder="Name your idea..."
+            placeholder="Name your solution idea..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full text-center text-2xl sm:text-5xl lg:text-6xl font-extralight text-white bg-transparent placeholder:text-neutral-700 focus:outline-none tracking-tight leading-tight"
@@ -293,12 +317,12 @@ export default function CreateIdeaPage() {
         </div>
 
         {/* 2. Central Living Idea Seed Canvas Organism */}
-        <div className="relative h-60 sm:h-72 w-full flex items-center justify-center pointer-events-none">
+        <div className="relative h-44 sm:h-56 w-full flex items-center justify-center pointer-events-none">
           <canvas ref={canvasRef} className="w-full h-full block" />
         </div>
 
         {/* 3. Category Shift Arc */}
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
           {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
@@ -317,7 +341,7 @@ export default function CreateIdeaPage() {
         </div>
 
         {/* 4. Integrated Editorial Blueprint Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           <div className="space-y-2">
             <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-400 block">
               02 // THE PROBLEM STATEMENT
@@ -327,7 +351,7 @@ export default function CreateIdeaPage() {
               placeholder="What friction exists in the world today?"
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
-              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none"
+              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none leading-relaxed"
             />
           </div>
 
@@ -340,27 +364,69 @@ export default function CreateIdeaPage() {
               placeholder="How does your proposed architecture solve it?"
               value={solution}
               onChange={(e) => setSolution(e.target.value)}
-              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none"
+              className="w-full p-4 rounded-2xl border border-white/10 bg-white/[0.02] text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50 transition-all font-light resize-none leading-relaxed"
             />
           </div>
         </div>
 
-        {/* 5. Satellite Tags Input */}
+        {/* 5. Satellite Skills & Tags Input */}
         <div className="max-w-md mx-auto space-y-2 text-center pt-2">
           <span className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-500 block">
-            SATELLITE TAGS
+            REQUIRED SKILLS & TECHNOLOGIES
           </span>
           <input
             type="text"
-            placeholder="e.g. rust, distributed-systems, zero-knowledge"
+            placeholder="e.g. Python, CRDTs, Rust, GraphQL"
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             className="w-full text-center px-4 py-2 rounded-full border border-white/10 bg-white/[0.02] text-xs font-mono text-indigo-300 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400/50"
           />
         </div>
 
-        {/* 6. Ignite Concept Action */}
-        <div className="flex items-center justify-center pt-6">
+        {/* 6. Visibility & Idea Protection System */}
+        <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.02] space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              <span>IDEA PROTECTION & ACCESS VISIBILITY</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+            {VISIBILITIES.map((v) => {
+              const Icon = v.icon;
+              const isSelected = visibility === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVisibility(v.id)}
+                  className={cn(
+                    "p-3 rounded-xl border text-left transition-all space-y-1",
+                    isSelected
+                      ? "border-primary bg-primary/10 text-white shadow-subtle"
+                      : "border-white/10 bg-white/[0.02] text-neutral-400 hover:border-white/20 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 font-semibold text-xs text-white">
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    <span>{v.label}</span>
+                  </div>
+                  <p className="text-[10px] leading-tight text-neutral-400">
+                    {v.desc}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-[10px] font-mono text-neutral-400 italic pt-1">
+            🔒 IdeaEra records platform activity, ownership information, timestamps, and version history. Private ideas remain strictly confidential.
+          </p>
+        </div>
+
+        {/* 7. Ignite Concept Action */}
+        <div className="flex items-center justify-center pt-4">
           <button
             type="submit"
             disabled={isSubmitting || !title.trim()}
@@ -377,5 +443,19 @@ export default function CreateIdeaPage() {
         IDEA ERA // SYNTHESIS LAB • WHERE IDEAS BECOME POSSIBILITIES
       </div>
     </div>
+  );
+}
+
+export default function CreateIdeaPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="w-full min-h-[calc(100vh-4rem)] flex items-center justify-center text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <CreateIdeaContent />
+    </React.Suspense>
   );
 }

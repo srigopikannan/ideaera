@@ -26,6 +26,14 @@ export async function createIdeaAction(formData: FormData) {
       ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
 
+    const problem_id = (formData.get("problem_id") as string)?.trim() || undefined;
+    const company_id = (formData.get("company_id") as string)?.trim() || undefined;
+    const visibility = ((formData.get("visibility") as string)?.trim() || "public") as any;
+    const rawSkills = (formData.get("skills_needed") as string)?.trim() || "";
+    const skills_needed = rawSkills
+      ? rawSkills.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
     const created = await createIdea({
       title,
       description,
@@ -33,10 +41,22 @@ export async function createIdeaAction(formData: FormData) {
       tags,
       problem: problem || undefined,
       solution: solution || undefined,
+      problem_id,
+      company_id,
+      visibility,
+      skills_needed,
     });
 
     revalidatePath("/ideas");
     revalidatePath("/dashboard");
+    if (problem_id) {
+      revalidatePath(`/problems/${problem_id}`);
+      revalidatePath("/problems");
+    }
+    if (company_id) {
+      revalidatePath(`/companies/${company_id}`);
+      revalidatePath("/companies");
+    }
     return { success: true, idea: created };
   } catch (err: any) {
     console.error("Error in createIdeaAction:", err);

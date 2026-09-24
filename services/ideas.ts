@@ -47,6 +47,8 @@ function mapIdea(raw: any, isLiked: boolean = false): Idea {
     goals: raw.goals || null,
     skills_needed: Array.isArray(raw.skills_needed) ? raw.skills_needed : [],
     collaboration_info: raw.collaboration_info || null,
+    problem_id: raw.problem_id || null,
+    company_id: raw.company_id || null,
     version: raw.version || 1,
     version_history: Array.isArray(raw.version_history) ? raw.version_history : [],
     category: raw.category || "AI & Machine Learning",
@@ -150,6 +152,12 @@ export async function createIdea(data: {
   tags: string[];
   problem?: string;
   solution?: string;
+  visibility?: 'public' | 'community' | 'selected' | 'private';
+  problem_id?: string;
+  company_id?: string;
+  skills_needed?: string[];
+  collaboration_info?: string;
+  goals?: string;
 }): Promise<Idea> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -164,6 +172,20 @@ export async function createIdea(data: {
     data.description?.trim() ||
     (problem && solution ? `${problem}\n\n${solution}` : problem || solution || data.title.trim());
 
+  let companyId = data.company_id || null;
+
+  // If problem_id is provided and company_id is not, resolve company_id from problem
+  if (data.problem_id && !companyId) {
+    const { data: prob } = await supabase
+      .from("company_problems")
+      .select("company_id")
+      .eq("id", data.problem_id)
+      .maybeSingle();
+    if (prob?.company_id) {
+      companyId = prob.company_id;
+    }
+  }
+
   const { data: inserted, error } = await supabase
     .from("ideas")
     .insert({
@@ -171,9 +193,14 @@ export async function createIdea(data: {
       description,
       problem,
       solution,
+      goals: data.goals?.trim() || null,
+      skills_needed: data.skills_needed || [],
+      collaboration_info: data.collaboration_info?.trim() || null,
+      problem_id: data.problem_id || null,
+      company_id: companyId,
       category: data.category,
       stage: "Idea",
-      visibility: "public",
+      visibility: data.visibility || "public",
       creator_id: user.id,
     })
     .select("*, creator:profiles!creator_id(*)")
@@ -181,6 +208,20 @@ export async function createIdea(data: {
 
   if (error || !inserted) {
     throw new Error(error?.message || "Failed to create idea.");
+  }
+
+  // If linked to problem, increment problem solutions_count
+  if (data.problem_id) {
+    try {
+      const { count } = await supabase
+        .from("ideas")
+        .select("*", { count: "exact", head: true })
+        .eq("problem_id", data.problem_id);
+      await supabase
+        .from("company_problems")
+        .update({ solutions_count: count || 1 })
+        .eq("id", data.problem_id);
+    } catch {}
   }
 
   return mapIdea(inserted);

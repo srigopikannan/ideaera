@@ -200,6 +200,18 @@ export function ProfileView({
                   </div>
                 )}
 
+                {profile.availability && (
+                  <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-3 py-1 rounded-full">
+                    <Clock className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <span>{profile.availability}</span>
+                    {profile.availability_hours && (
+                      <span className="text-emerald-400/80 font-normal">
+                        ({profile.availability_hours})
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {locationString && (
                   <div className="flex items-center gap-1.5 text-neutral-300 bg-white/[0.03] border border-white/10 px-3 py-1 rounded-full">
                     <MapPin className="h-3.5 w-3.5 text-cyan-400 shrink-0" />

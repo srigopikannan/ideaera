@@ -56,6 +56,7 @@ export function TeammateDiscovery({
   const [cityFilter, setCityFilter] = React.useState("");
   const [stateFilter, setStateFilter] = React.useState("");
   const [hackathonFilter, setHackathonFilter] = React.useState(initialHackathon || "");
+  const [availabilityFilter, setAvailabilityFilter] = React.useState<string>("All");
 
   // Connection states map: userId -> status
   const [connectionStates, setConnectionStates] = React.useState<Record<string, string>>({});
@@ -158,6 +159,19 @@ export function TeammateDiscovery({
         const st = stateFilter.toLowerCase().trim();
         list = list.filter((p) => p.state?.toLowerCase().includes(st) || p.location?.toLowerCase().includes(st));
       }
+
+      if (availabilityFilter !== "All") {
+        list = list.filter(
+          (p) => p.availability?.toLowerCase() === availabilityFilter.toLowerCase()
+        );
+      }
+
+      // Prioritize available innovators
+      list = [...list].sort((a, b) => {
+        const aAvail = a.availability && a.availability !== "Not currently available" ? 1 : 0;
+        const bAvail = b.availability && b.availability !== "Not currently available" ? 1 : 0;
+        return bAvail - aAvail;
+      });
     }
 
     return list;
@@ -171,6 +185,7 @@ export function TeammateDiscovery({
     collegeFilter,
     cityFilter,
     stateFilter,
+    availabilityFilter,
   ]);
 
   return (
@@ -326,6 +341,25 @@ export function TeammateDiscovery({
                 emptyMessage="No matching colleges found."
               />
             </div>
+
+            {/* Availability Filter */}
+            <div>
+              <label className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider mb-1.5 block">
+                Availability
+              </label>
+              <select
+                value={availabilityFilter}
+                onChange={(e) => setAvailabilityFilter(e.target.value)}
+                className="w-full h-[38px] rounded-xl border border-white/10 bg-[#0a0c13] px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+              >
+                <option value="All">All Availabilities</option>
+                <option value="Available">Available</option>
+                <option value="Available evenings">Available evenings</option>
+                <option value="Available weekends">Available weekends</option>
+                <option value="Limited availability">Limited availability</option>
+                <option value="Not currently available">Not currently available</option>
+              </select>
+            </div>
           </div>
 
           {/* Skill Filter Tags & Input */}
@@ -448,8 +482,17 @@ export function TeammateDiscovery({
                     )}
                   </div>
 
-                  {/* Badges: College & Location */}
+                  {/* Badges: Availability, College & Location */}
                   <div className="space-y-1.5 text-[11px] font-mono text-neutral-400">
+                    {person.availability && (
+                      <div className="flex items-center gap-1.5 truncate text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-[10px]">
+                        <Clock className="h-3 w-3 text-emerald-400 shrink-0" />
+                        <span className="truncate">{person.availability}</span>
+                        {person.availability_hours && (
+                          <span className="text-emerald-500/80 truncate">· {person.availability_hours}</span>
+                        )}
+                      </div>
+                    )}
                     {person.college && (
                       <div className="flex items-center gap-1.5 truncate text-neutral-300">
                         <GraduationCap className="h-3.5 w-3.5 text-indigo-400 shrink-0" />

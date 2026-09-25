@@ -43,6 +43,12 @@ export function ProjectCard({ project }: ProjectCardProps) {
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
           <div className="absolute top-3 right-3">{getStatusBadge(project.status)}</div>
+          {project.needs_help && (
+            <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600/90 text-white text-[10px] font-mono font-bold tracking-wide backdrop-blur-md shadow-lg shadow-rose-600/30 animate-pulse">
+              <span>🚨 Needs Help</span>
+              {project.help_category && <span>· {project.help_category}</span>}
+            </div>
+          )}
         </div>
 
         {/* Content Body */}
@@ -59,6 +65,30 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <p className="mt-2 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
             {project.description}
           </p>
+
+          {/* Rescue Blocker callout */}
+          {project.needs_help && project.help_description && (
+            <div className="mt-3 p-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-300 text-[11px] font-mono line-clamp-2">
+              <span className="font-semibold text-rose-400">Blocked: </span>
+              {project.help_description}
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {typeof project.progress === "number" && (
+            <div className="mt-3 space-y-1">
+              <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
+                <span>Progress</span>
+                <span>{project.progress}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all"
+                  style={{ width: `${project.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Tech Stack Pills */}
           {project.technologies && project.technologies.length > 0 && (

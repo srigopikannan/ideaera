@@ -139,3 +139,62 @@ export async function deleteIdeaAction(ideaId: string) {
     return { error: err?.message || "Failed to delete idea. Please try again." };
   }
 }
+
+export async function updateIdeaValidationAction(
+  ideaId: string,
+  data: {
+    status?: "not_validated" | "testing" | "validated";
+    target_users?: string;
+    why_it_matters?: string;
+    alternatives?: string;
+    expected_benefits?: string;
+    questions?: string[];
+  }
+) {
+  try {
+    const { updateIdeaValidation } = await import("@/services/ideas");
+    const updated = await updateIdeaValidation(ideaId, data);
+    revalidatePath(`/ideas/${ideaId}`);
+    revalidatePath("/ideas");
+    revalidatePath("/dashboard");
+    return { success: true, idea: updated };
+  } catch (err: any) {
+    console.error("Error in updateIdeaValidationAction:", err);
+    return { error: err?.message || "Failed to update validation settings." };
+  }
+}
+
+export async function submitIdeaValidationFeedbackAction(
+  ideaId: string,
+  data: {
+    vote: "valid" | "needs_work" | "impractical";
+    feedback: string;
+    answers?: Record<string, string>;
+  }
+) {
+  try {
+    const { submitIdeaValidationFeedback } = await import("@/services/ideas");
+    const feedback = await submitIdeaValidationFeedback(ideaId, data);
+    revalidatePath(`/ideas/${ideaId}`);
+    return { success: true, feedback };
+  } catch (err: any) {
+    console.error("Error in submitIdeaValidationFeedbackAction:", err);
+    return { error: err?.message || "Failed to submit validation feedback." };
+  }
+}
+
+export async function convertIdeaToProjectAction(ideaId: string) {
+  try {
+    const { convertIdeaToProject } = await import("@/services/ideas");
+    const project = await convertIdeaToProject(ideaId);
+    revalidatePath(`/ideas/${ideaId}`);
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${project.id}`);
+    revalidatePath("/dashboard");
+    return { success: true, project };
+  } catch (err: any) {
+    console.error("Error in convertIdeaToProjectAction:", err);
+    return { error: err?.message || "Failed to convert idea to project." };
+  }
+}
+

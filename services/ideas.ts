@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { Idea, IdeaComment } from "@/types";
+import { Idea, IdeaComment, IdeaValidationFeedback, IdeaValidationData, Project } from "@/types";
 import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
 import { evaluateUserBadges } from "@/services/badges";
+import { createProject } from "@/services/projects";
 
-function mapIdea(raw: any, isLiked: boolean = false): Idea {
+export function mapIdea(raw: any, isLiked: boolean = false): Idea {
   const authorProfile = raw.creator || raw.author || null;
   const rawTags = raw.tags;
   let parsedTags: string[] = [];
@@ -57,6 +58,12 @@ function mapIdea(raw: any, isLiked: boolean = false): Idea {
     visibility: raw.visibility || "public",
     likes_count: raw.likes_count || 0,
     comments_count: raw.comments_count || 0,
+    validation_status: raw.validation_status || "not_validated",
+    validation_target_users: raw.validation_target_users || null,
+    validation_why_it_matters: raw.validation_why_it_matters || null,
+    validation_alternatives: raw.validation_alternatives || null,
+    validation_expected_benefits: raw.validation_expected_benefits || null,
+    validation_questions: Array.isArray(raw.validation_questions) ? raw.validation_questions : [],
     created_at: raw.created_at,
     updated_at: raw.updated_at || raw.created_at,
     is_liked: isLiked,
@@ -481,6 +488,7 @@ export async function deleteIdea(id: string): Promise<void> {
     supabase.from("idea_likes").delete().eq("idea_id", id),
     supabase.from("idea_tags").delete().eq("idea_id", id),
     supabase.from("idea_votes").delete().eq("idea_id", id),
+    supabase.from("idea_validation_feedback").delete().eq("idea_id", id),
   ]);
 
   // 3. Delete the parent idea record
@@ -494,3 +502,266 @@ export async function deleteIdea(id: string): Promise<void> {
     throw new Error(deleteErr.message || "Failed to delete idea.");
   }
 }
+
+/* =========================================================================
+   FEATURE 3: 📊 IDEA VALIDATION
+   ========================================================================= */
+
+export async function updateIdeaValidation(
+  ideaId: string,
+  data: {
+    status?: "not_validated" | "testing" | "validated";
+    target_users?: string;
+    why_it_matters?: string;
+    alternatives?: string;
+    expected_benefits?: string;
+    questions?: string[];
+  }
+): Promise<Idea> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Must be signed in.");
+
+  const { data: idea } = await supabase
+    .from("ideas")
+    .select("creator_id")
+    .eq("id", ideaId)
+    .single();
+
+  if (!idea || idea.creator_id !== user.id) {
+    throw new Error("Unauthorized: Only the idea creator can update validation parameters.");
+  }
+
+  const payload: any = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.status !== undefined) payload.validation_status = data.status;
+  if (data.target_users !== undefined) payload.validation_target_users = data.target_users.trim() || null;
+  if (data.why_it_matters !== undefined) payload.validation_why_it_matters = data.why_it_matters.trim() || null;
+  if (data.alternatives !== undefined) payload.validation_alternatives = data.alternatives.trim() || null;
+  if (data.expected_benefits !== undefined) payload.validation_expected_benefits = data.expected_benefits.trim() || null;
+  if (data.questions !== undefined) {
+    payload.validation_questions = data.questions.map((q) => q.trim()).filter(Boolean);
+  }
+
+  const { data: updated, error } = await supabase
+    .from("ideas")
+    .update(payload)
+    .eq("id", ideaId)
+    .select("*, creator:profiles!creator_id(*)")
+    .single();
+
+  if (error || !updated) {
+    throw new Error(error?.message || "Failed to update validation data.");
+  }
+
+  return mapIdea(updated);
+}
+
+export async function submitIdeaValidationFeedback(
+  ideaId: string,
+  data: {
+    vote: "valid" | "needs_work" | "impractical";
+    feedback: string;
+    answers?: Record<string, string>;
+  }
+): Promise<IdeaValidationFeedback> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Must be logged in to submit feedback.");
+
+  const { data: idea } = await supabase
+    .from("ideas")
+    .select("id, title, creator_id")
+    .eq("id", ideaId)
+    .single();
+
+  if (!idea) throw new Error("Idea not found.");
+
+  const { data: inserted, error } = await supabase
+    .from("idea_validation_feedback")
+    .upsert(
+      {
+        idea_id: ideaId,
+        user_id: user.id,
+        vote: data.vote,
+        feedback: data.feedback.trim(),
+        answers: data.answers || {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "idea_id,user_id" }
+    )
+    .select("*, user:profiles!user_id(*)")
+    .single();
+
+  if (error || !inserted) {
+    throw new Error(error?.message || "Failed to record validation feedback.");
+  }
+
+  // Notify creator if not self
+  if (idea.creator_id !== user.id) {
+    try {
+      const { data: reviewerProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+
+      await supabase.from("notifications").insert({
+        user_id: idea.creator_id,
+        recipient_id: idea.creator_id,
+        actor_id: user.id,
+        entity_id: ideaId,
+        related_id: ideaId,
+        idea_id: ideaId,
+        type: "validation_feedback",
+        title: "📊 Idea Validation Feedback",
+        message: `${reviewerProfile?.full_name || "A community member"} shared validation feedback on "${idea.title}".`,
+        read: false,
+        is_read: false,
+        data: { idea_id: ideaId, vote: data.vote },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn("Failed to dispatch validation feedback notification:", e);
+    }
+  }
+
+  return {
+    id: inserted.id,
+    idea_id: inserted.idea_id,
+    user_id: inserted.user_id,
+    user: inserted.user || undefined,
+    vote: inserted.vote,
+    feedback: inserted.feedback,
+    answers: inserted.answers,
+    created_at: inserted.created_at,
+    updated_at: inserted.updated_at,
+  };
+}
+
+export async function getIdeaValidationData(ideaId: string): Promise<IdeaValidationData> {
+  try {
+    const supabase = await createClient();
+
+    const [ideaRes, feedbackRes] = await Promise.all([
+      supabase
+        .from("ideas")
+        .select(
+          "validation_status, validation_target_users, validation_why_it_matters, validation_alternatives, validation_expected_benefits, validation_questions"
+        )
+        .eq("id", ideaId)
+        .single(),
+      supabase
+        .from("idea_validation_feedback")
+        .select("*, user:profiles!user_id(id, full_name, username, avatar_url, headline)")
+        .eq("idea_id", ideaId)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const idea = ideaRes.data;
+    const feedbackList: IdeaValidationFeedback[] = (feedbackRes.data || []).map((f: any) => ({
+      id: f.id,
+      idea_id: f.idea_id,
+      user_id: f.user_id,
+      user: f.user || undefined,
+      vote: f.vote,
+      feedback: f.feedback,
+      answers: f.answers,
+      created_at: f.created_at,
+      updated_at: f.updated_at,
+    }));
+
+    const total = feedbackList.length;
+    const validCount = feedbackList.filter((f) => f.vote === "valid").length;
+    const needsWorkCount = feedbackList.filter((f) => f.vote === "needs_work").length;
+    const impracticalCount = feedbackList.filter((f) => f.vote === "impractical").length;
+
+    const positivePercentage = total > 0 ? Math.round((validCount / total) * 100) : 0;
+
+    return {
+      status: (idea?.validation_status as any) || "not_validated",
+      target_users: idea?.validation_target_users || null,
+      why_it_matters: idea?.validation_why_it_matters || null,
+      alternatives: idea?.validation_alternatives || null,
+      expected_benefits: idea?.validation_expected_benefits || null,
+      questions: Array.isArray(idea?.validation_questions) ? idea.validation_questions : [],
+      feedback: feedbackList,
+      summary: {
+        total,
+        valid_count: validCount,
+        needs_work_count: needsWorkCount,
+        impractical_count: impracticalCount,
+        positive_percentage: positivePercentage,
+      },
+    };
+  } catch (err) {
+    console.error("Error in getIdeaValidationData:", err);
+    return {
+      status: "not_validated",
+      target_users: null,
+      why_it_matters: null,
+      alternatives: null,
+      expected_benefits: null,
+      questions: [],
+      feedback: [],
+      summary: {
+        total: 0,
+        valid_count: 0,
+        needs_work_count: 0,
+        impractical_count: 0,
+        positive_percentage: 0,
+      },
+    };
+  }
+}
+
+export async function convertIdeaToProject(ideaId: string): Promise<Project> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Must be logged in.");
+
+  const { data: idea, error: ideaErr } = await supabase
+    .from("ideas")
+    .select("*")
+    .eq("id", ideaId)
+    .single();
+
+  if (ideaErr || !idea) {
+    throw new Error("Idea not found.");
+  }
+
+  if (idea.creator_id !== user.id) {
+    throw new Error("Unauthorized: Only the creator of an idea can convert it into a project.");
+  }
+
+  // Create project linking to idea
+  const project = await createProject({
+    name: idea.title,
+    description: idea.description || idea.problem || "Project derived from innovation idea.",
+    technologies: Array.isArray(idea.skills_needed) ? idea.skills_needed : [],
+    required_skills: Array.isArray(idea.skills_needed) ? idea.skills_needed : [],
+    idea_id: idea.id,
+    status: "in_development",
+  });
+
+  // Update idea stage to In Progress
+  await supabase
+    .from("ideas")
+    .update({ stage: "Planning", updated_at: new Date().toISOString() })
+    .eq("id", ideaId);
+
+  return project;
+}
+

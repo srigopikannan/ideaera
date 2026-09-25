@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Idea, IdeaComment, Profile } from "@/types";
+import { Idea, IdeaComment, IdeaValidationData, Profile } from "@/types";
 import { toggleLikeAction, addCommentAction, deleteIdeaAction } from "@/app/(dashboard)/actions/ideas";
 import { formatDate, formatFullDateTime } from "@/lib/utils";
+import { IdeaValidationSection } from "@/components/ideas/IdeaValidationSection";
 import {
   ArrowLeft,
   Heart,
@@ -30,6 +31,7 @@ import {
   GraduationCap,
   MapPin,
   Hash,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
@@ -40,20 +42,23 @@ interface IdeaDetailViewProps {
   idea: Idea;
   initialComments: IdeaComment[];
   currentUser: Profile;
+  initialValidationData?: IdeaValidationData;
 }
 
 const DIMENSIONS = [
   { id: "01", name: "THE IDEA", desc: "Core spark & initial concept" },
   { id: "02", name: "THE PROBLEM", desc: "Contextual friction & bottleneck" },
   { id: "03", name: "THE POSSIBILITY", desc: "Architectural blueprint & stack" },
-  { id: "04", name: "RECORD & OWNERSHIP", desc: "Platform record & version history" },
-  { id: "05", name: "COLLABORATE", desc: "Peer critique & participation" },
+  { id: "04", name: "VALIDATION", desc: "Peer critique & market signal" },
+  { id: "05", name: "RECORD & OWNERSHIP", desc: "Platform record & version history" },
+  { id: "06", name: "COLLABORATE", desc: "Peer critique & participation" },
 ];
 
 export function IdeaDetailView({
   idea,
   initialComments,
   currentUser,
+  initialValidationData,
 }: IdeaDetailViewProps) {
   const router = useRouter();
   const [currentIdea, setCurrentIdea] = React.useState<Idea>(idea);
@@ -317,6 +322,32 @@ export function IdeaDetailView({
             <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 text-[10px] font-mono">
               v{currentIdea.version || 1}.0
             </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-mono uppercase tracking-wider",
+                currentIdea.validation_status === "validated"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : currentIdea.validation_status === "testing"
+                  ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  currentIdea.validation_status === "validated"
+                    ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                    : currentIdea.validation_status === "testing"
+                    ? "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]"
+                    : "bg-amber-400"
+                )}
+              />
+              {currentIdea.validation_status === "validated"
+                ? "Validated"
+                : currentIdea.validation_status === "testing"
+                ? "In Validation"
+                : "Not Validated"}
+            </span>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
@@ -404,10 +435,41 @@ export function IdeaDetailView({
         </div>
       </section>
 
-      {/* DIMENSION 04: OWNERSHIP & PLATFORM RECORD */}
+      {/* DIMENSION 04: VALIDATION & SIGNAL PROTOCOL */}
+      <IdeaValidationSection
+        idea={currentIdea}
+        validationData={
+          initialValidationData || {
+            status: currentIdea.validation_status || "not_validated",
+            target_users: currentIdea.validation_target_users || null,
+            why_it_matters: currentIdea.validation_why_it_matters || null,
+            alternatives: currentIdea.validation_alternatives || null,
+            expected_benefits: currentIdea.validation_expected_benefits || null,
+            questions: currentIdea.validation_questions?.length ? currentIdea.validation_questions : [
+              "Would you use this product/solution?",
+              "What critical feature or consideration is missing?",
+              "What are the biggest operational or technical risks?",
+            ],
+            feedback: [],
+            summary: {
+              total: 0,
+              valid_count: 0,
+              needs_work_count: 0,
+              impractical_count: 0,
+              positive_percentage: 0,
+            },
+          }
+        }
+        currentUser={currentUser}
+        onValidationUpdated={(updated) => {
+          setCurrentIdea((prev) => ({ ...prev, ...updated }));
+        }}
+      />
+
+      {/* DIMENSION 05: OWNERSHIP & PLATFORM RECORD */}
       <section className="relative py-24 px-6 sm:px-12 max-w-5xl mx-auto space-y-8 border-t border-white/[0.06]">
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400">
-          <span className="text-cyan-400 font-bold">SECTION 04 //</span>
+          <span className="text-cyan-400 font-bold">SECTION 05 //</span>
           <span>OWNERSHIP & PLATFORM RECORD</span>
         </div>
 
@@ -546,11 +608,11 @@ export function IdeaDetailView({
         )}
       </section>
 
-      {/* DIMENSION 05: COLLABORATE & CRITIQUE */}
+      {/* DIMENSION 06: COLLABORATE & CRITIQUE */}
       <section className="relative py-24 px-6 sm:px-12 max-w-5xl mx-auto space-y-8 border-t border-white/[0.06]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400">
-            <span className="text-emerald-400 font-bold">SECTION 05 //</span>
+            <span className="text-emerald-400 font-bold">SECTION 06 //</span>
             <span>DIALOGUE & PEER CRITIQUE ({comments.length})</span>
           </div>
           <span className="text-xs font-mono text-neutral-500">Live Synthesis Stream</span>

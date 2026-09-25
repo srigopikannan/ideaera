@@ -78,8 +78,8 @@ export function formatProfile(p: any, viewerUserId?: string): Profile {
   const displayCountry = (isOwner || showLocation) ? country : null;
   const displayAge = (isOwner || showAge) && p.age ? Number(p.age) : null;
 
-  // College resolution (checks college_id, college column, availability column fallback, or raw)
-  const college = p.college || p.availability || p.college_rel?.name || null;
+  // College resolution (checks college_id, college column, or relational)
+  const college = p.college || p.college_rel?.name || null;
   const college_id = p.college_id || p.college_rel?.id || null;
   const college_location = p.college_rel
     ? [p.college_rel.city, p.college_rel.state || "Tamil Nadu"].filter(Boolean).join(", ")
@@ -103,6 +103,8 @@ export function formatProfile(p: any, viewerUserId?: string): Profile {
     college_location,
     age: displayAge,
     show_age: showAge,
+    availability: p.availability || "Available",
+    availability_hours: p.availability_hours || null,
     onboarding_completed: Boolean(
       p.onboarding_completed ?? (cleanHeadline && skills.length > 0)
     ),
@@ -251,6 +253,8 @@ export interface ProfileFilterOptions {
   collegeFilter?: string;
   cityFilter?: string;
   stateFilter?: string;
+  availabilityFilter?: string;
+  interestFilter?: string;
 }
 
 export async function getAllProfiles(
@@ -320,6 +324,22 @@ export async function getAllProfiles(
         results = results.filter((p) =>
           (p.state && p.state.toLowerCase().includes(targetState)) ||
           (p.location && p.location.toLowerCase().includes(targetState))
+        );
+      }
+
+      // Filter by availability
+      if (options.availabilityFilter && options.availabilityFilter !== "All") {
+        const targetAvail = options.availabilityFilter.toLowerCase();
+        results = results.filter((p) =>
+          p.availability && p.availability.toLowerCase().includes(targetAvail)
+        );
+      }
+
+      // Filter by interest
+      if (options.interestFilter && options.interestFilter !== "All") {
+        const targetInterest = options.interestFilter.toLowerCase();
+        results = results.filter((p) =>
+          p.interests?.some((i: string) => i.toLowerCase().includes(targetInterest))
         );
       }
 
@@ -424,7 +444,14 @@ export async function updateProfile(
 
   if (profileData.college !== undefined) {
     updatePayload.college = profileData.college || null;
-    updatePayload.availability = profileData.college || null;
+  }
+
+  if (profileData.availability !== undefined) {
+    updatePayload.availability = profileData.availability || "Available";
+  }
+
+  if (profileData.availability_hours !== undefined) {
+    updatePayload.availability_hours = profileData.availability_hours || null;
   }
 
   if (profileData.college_id !== undefined) {
@@ -450,6 +477,8 @@ export async function updateProfile(
       ...(profileData.state !== undefined ? { state: profileData.state } : {}),
       ...(profileData.country !== undefined ? { country: profileData.country } : {}),
       ...(profileData.show_location !== undefined ? { show_location: profileData.show_location } : {}),
+      ...(profileData.availability !== undefined ? { availability: profileData.availability || "Available" } : {}),
+      ...(profileData.availability_hours !== undefined ? { availability_hours: profileData.availability_hours || null } : {}),
       ...(profileData.onboarding_completed !== undefined ? { onboarding_completed: profileData.onboarding_completed } : {}),
     };
 

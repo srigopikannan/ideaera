@@ -97,6 +97,13 @@ export function PersonCard({ person, featured = false }: PersonCardProps) {
                 <span className="truncate">{person.location}</span>
               </div>
             )}
+
+            {person.availability && (
+              <div className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mt-1.5 max-w-full">
+                <Clock className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{person.availability}</span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -3,7 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Project, Profile } from "@/types";
+import {
+  Project,
+  Profile,
+  ProjectTask,
+  ProjectMilestone,
+  ProjectMember,
+  ProjectFile,
+  ProjectDiscussion,
+  ProjectActivity,
+  SkillGapAnalysis,
+} from "@/types";
 import { formatDate } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -20,6 +30,7 @@ import {
   Loader2,
   ShieldCheck,
   ExternalLink,
+  LifeBuoy,
 } from "lucide-react";
 import { Github } from "@/components/ui/brand-icons";
 import {
@@ -29,24 +40,46 @@ import {
 } from "@/app/(dashboard)/actions/projects";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { EditProjectModal } from "@/components/projects/EditProjectModal";
+import { ProjectRescueBanner } from "@/components/projects/ProjectRescueBanner";
+import { ProjectRescueModal } from "@/components/projects/ProjectRescueModal";
+import { SkillGapFinder } from "@/components/projects/SkillGapFinder";
+import { ProjectWorkspace } from "@/components/projects/ProjectWorkspace";
 import { cn } from "@/lib/utils";
 
 interface ProjectDetailViewProps {
   project: Project;
-  currentUser: Profile;
+  currentUser?: Profile | null;
+  workspaceData?: {
+    project: Project;
+    tasks: ProjectTask[];
+    milestones: ProjectMilestone[];
+    members: ProjectMember[];
+    files: ProjectFile[];
+    discussions: ProjectDiscussion[];
+    activity: ProjectActivity[];
+    skill_gaps: SkillGapAnalysis;
+    progress: number;
+  };
 }
 
-export function ProjectDetailView({ project, currentUser }: ProjectDetailViewProps) {
+export function ProjectDetailView({
+  project,
+  currentUser,
+  workspaceData,
+}: ProjectDetailViewProps) {
   const router = useRouter();
   const [currentProject, setCurrentProject] = React.useState<Project>(project);
   const isOwner = Boolean(currentUser?.id && currentProject.owner_id === currentUser.id);
   const isMember = Boolean(
-    currentUser?.id && currentProject.members?.some((m) => m.user_id === currentUser.id)
+    currentUser?.id &&
+      (currentProject.members?.some((m) => m.user_id === currentUser.id) ||
+        workspaceData?.members?.some((m) => m.user_id === currentUser.id))
   );
 
   const [scrollProgress, setScrollProgress] = React.useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [isRescueModalOpen, setIsRescueModalOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
@@ -145,7 +178,12 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
 
   const stages = [
     { id: "01", name: "GENESIS", subtitle: "Conceptual Thesis", done: true },
-    { id: "02", name: "ARCHITECTURE", subtitle: "Spec & Modules", done: isLaunched || isBeta || isBuilding },
+    {
+      id: "02",
+      name: "ARCHITECTURE",
+      subtitle: "Spec & Modules",
+      done: isLaunched || isBeta || isBuilding,
+    },
     { id: "03", name: "BUILD & BETA", subtitle: "Active Codebase", done: isLaunched || isBeta },
     { id: "04", name: "LAUNCH", subtitle: "Live System Deployment", done: isLaunched },
   ];
@@ -174,7 +212,7 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
         </div>
 
         {/* Right Actions */}
-        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {currentProject.website_url && (
             <a
               href={currentProject.website_url}
@@ -199,6 +237,27 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
             </a>
           )}
 
+          {/* Project Rescue Button for Owner */}
+          {isOwner && (
+            <>
+              {currentProject.needs_help ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono text-rose-300 bg-rose-500/20 border border-rose-500/30">
+                  <LifeBuoy className="h-3.5 w-3.5 animate-pulse text-rose-400" />
+                  <span>Rescue Active</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsRescueModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono text-rose-300 hover:text-white border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 backdrop-blur-xl shadow-lg transition-colors"
+                >
+                  <LifeBuoy className="h-3.5 w-3.5 text-rose-400" />
+                  <span>Needs Help</span>
+                </button>
+              )}
+            </>
+          )}
+
           {isOwner ? (
             <>
               <button
@@ -211,7 +270,7 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
 
               <button
                 onClick={() => setIsDeleteModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono text-red-400 hover:text-red-300 border border-red-500/20 bg-[#0a0c13]/80 backdrop-blur-xl shadow-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono text-red-400 hover:text-red-300 border border-red-500/20 bg-[#0a0c13]/80 backdrop-blur-xl shadow-lg transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>Delete</span>
@@ -254,22 +313,27 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
       )}
 
       {/* Project Hero Dimension */}
-      <section className="relative min-h-[50vh] sm:min-h-[75vh] flex flex-col justify-center px-4 sm:px-12 max-w-6xl mx-auto space-y-6 sm:space-y-8 pt-6 sm:pt-0">
+      <section className="relative min-h-[40vh] sm:min-h-[50vh] flex flex-col justify-center px-4 sm:px-12 max-w-6xl mx-auto space-y-6 sm:space-y-8 pt-8">
         <div className="space-y-4 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="px-3.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase tracking-[0.24em]">
               VENTURE // {currentProject.status.replace("_", " ")}
             </span>
+            {currentProject.needs_help && (
+              <span className="px-3 py-1 rounded-full bg-rose-600/90 text-white text-[10px] font-mono font-bold tracking-wide shadow-lg shadow-rose-600/30 animate-pulse">
+                🚨 Needs Help: {currentProject.help_category || "Assistance"}
+              </span>
+            )}
             <span className="text-xs font-mono text-neutral-500">
               Forged {formatDate(currentProject.created_at)}
             </span>
           </div>
 
-          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-extralight tracking-tight text-white leading-[1.05] break-words">
+          <h1 className="text-3xl sm:text-6xl font-extralight tracking-tight text-white leading-[1.05] break-words">
             {currentProject.name}
           </h1>
 
-          <p className="text-sm sm:text-xl text-neutral-300 font-light leading-relaxed whitespace-pre-line break-words">
+          <p className="text-sm sm:text-lg text-neutral-300 font-light leading-relaxed whitespace-pre-line break-words">
             {currentProject.description}
           </p>
 
@@ -300,145 +364,44 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
         </div>
       </section>
 
-      {/* VISUAL EVOLUTION TIMELINE SPINE */}
-      <section className="py-8 sm:py-12 px-4 sm:px-12 max-w-6xl mx-auto">
-        <div className="p-5 sm:p-12 rounded-3xl border border-white/[0.08] bg-[#0a0c13] space-y-6 sm:space-y-8 shadow-2xl relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-4">
-            <div className="flex items-center gap-2">
-              <Rocket className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-mono uppercase tracking-[0.26em] text-white">
-                THE EVOLUTION SPINE
-              </span>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-500">
-              START ●────────●────────●────────● LAUNCH
-            </span>
-          </div>
-
-          {/* Timeline Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 relative">
-            {stages.map((stage) => (
-              <div key={stage.id} className="space-y-2 text-left">
-                <div className="flex items-center gap-2 justify-start">
-                  <div
-                    className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center border text-xs font-mono transition-all shrink-0",
-                      stage.done
-                        ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)]"
-                        : "border-white/10 bg-white/[0.02] text-neutral-600"
-                    )}
-                  >
-                    {stage.done ? <Check className="h-4 w-4" /> : stage.id}
-                  </div>
-                  <span className="text-xs font-mono text-white font-medium">{stage.name}</span>
-                </div>
-                <p className="text-[11px] font-light text-neutral-400 pl-10">
-                  {stage.subtitle}
-                </p>
-              </div>
-            ))}
-          </div>
+      {/* 🚨 FEATURE 1: PROJECT RESCUE BANNER */}
+      {currentProject.needs_help && (
+        <div className="px-4 sm:px-12 max-w-6xl mx-auto pt-6">
+          <ProjectRescueBanner
+            project={currentProject}
+            currentUser={currentUser}
+            onResolved={() => {
+              setCurrentProject((prev) => ({ ...prev, needs_help: false }));
+              router.refresh();
+            }}
+          />
         </div>
-      </section>
-
-      {/* System Framework Modules */}
-      {currentProject.technologies && currentProject.technologies.length > 0 && (
-        <section className="py-6 sm:py-8 px-4 sm:px-12 max-w-6xl mx-auto space-y-4">
-          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.26em] text-neutral-400">
-            <Code2 className="h-3.5 w-3.5 text-indigo-400" />
-            <span>TECHNOLOGY ARTIFACTS</span>
-          </div>
-
-          <div className="flex flex-wrap gap-2 sm:gap-2.5">
-            {currentProject.technologies.map((t) => (
-              <span
-                key={t}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-white/10 bg-white/[0.02] text-xs font-mono text-neutral-300"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        </section>
       )}
 
-      {/* Venture Team & Collaborators */}
-      <section className="py-6 sm:py-8 px-4 sm:px-12 max-w-6xl mx-auto space-y-4 border-t border-white/[0.06]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.26em] text-neutral-400">
-            <Users className="h-3.5 w-3.5 text-emerald-400" />
-            <span>CORE CREW & COLLABORATORS</span>
-          </div>
-          <span className="text-xs font-mono text-neutral-500">
-            {1 + (currentProject.members?.length || 0)} Crew Members
-          </span>
+      {/* 🧩 FEATURE 2: SKILL GAP FINDER */}
+      {workspaceData?.skill_gaps && (
+        <div className="px-4 sm:px-12 max-w-6xl mx-auto pt-8">
+          <SkillGapFinder
+            projectId={currentProject.id}
+            initialAnalysis={workspaceData.skill_gaps}
+            isOwner={isOwner}
+          />
         </div>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-          {/* Owner Card */}
-          <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-300 font-bold overflow-hidden">
-                {currentProject.owner?.avatar_url ? (
-                  <img
-                    src={currentProject.owner.avatar_url}
-                    alt={currentProject.owner.full_name || "Lead"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  (currentProject.owner?.full_name || "L").charAt(0).toUpperCase()
-                )}
-              </div>
-              <div>
-                <Link
-                  href={`/people/${currentProject.owner?.username || "creator"}`}
-                  className="text-sm font-medium text-white hover:text-emerald-300 transition-colors"
-                >
-                  {currentProject.owner?.full_name || "Lead Architect"}
-                </Link>
-                <p className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-                  <ShieldCheck className="h-3 w-3" />
-                  <span>Lead Architect</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Members */}
-          {currentProject.members &&
-            currentProject.members.map((m) => (
-              <div
-                key={m.user_id}
-                className="p-4 rounded-2xl border border-white/10 bg-white/[0.02] flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-indigo-500/20 border border-white/10 flex items-center justify-center text-indigo-300 font-bold overflow-hidden">
-                    {m.user?.avatar_url ? (
-                      <img
-                        src={m.user.avatar_url}
-                        alt={m.user.full_name || "Member"}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      (m.user?.full_name || "M").charAt(0).toUpperCase()
-                    )}
-                  </div>
-                  <div>
-                    <Link
-                      href={`/people/${m.user?.username || "builder"}`}
-                      className="text-sm font-medium text-white hover:text-indigo-300 transition-colors"
-                    >
-                      {m.user?.full_name || "Builder"}
-                    </Link>
-                    <p className="text-[11px] font-mono text-neutral-400">
-                      {m.role || "Collaborator"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-      </section>
+      {/* 🏗️ FEATURE 5: PROJECT WORKSPACE */}
+      <div className="px-4 sm:px-12 max-w-6xl mx-auto pt-10">
+        <ProjectWorkspace
+          project={currentProject}
+          tasks={workspaceData?.tasks || []}
+          milestones={workspaceData?.milestones || []}
+          members={workspaceData?.members || currentProject.members || []}
+          files={workspaceData?.files || []}
+          discussions={workspaceData?.discussions || []}
+          activity={workspaceData?.activity || []}
+          currentUser={currentUser}
+        />
+      </div>
 
       {/* Deletion Confirmation Modal */}
       <DeleteConfirmModal
@@ -463,6 +426,18 @@ export function ProjectDetailView({ project, currentUser }: ProjectDetailViewPro
         onClose={() => setIsEditModalOpen(false)}
         onUpdated={(updated) => {
           setCurrentProject((prev) => ({ ...prev, ...updated }));
+          router.refresh();
+        }}
+      />
+
+      {/* Project Rescue Request Modal */}
+      <ProjectRescueModal
+        projectId={currentProject.id}
+        projectName={currentProject.name}
+        isOpen={isRescueModalOpen}
+        onClose={() => setIsRescueModalOpen(false)}
+        onSuccess={() => {
+          setCurrentProject((prev) => ({ ...prev, needs_help: true }));
           router.refresh();
         }}
       />

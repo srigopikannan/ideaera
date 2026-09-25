@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getIdeaById, getIdeaComments } from "@/services/ideas";
+import { getIdeaById, getIdeaComments, getIdeaValidationData } from "@/services/ideas";
 import { getCurrentUserProfile } from "@/services/profile";
 import { IdeaDetailView } from "@/components/ideas/IdeaDetailView";
 
@@ -19,10 +19,11 @@ export default async function IdeaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [idea, comments, currentUser] = await Promise.all([
+  const [idea, comments, currentUser, validationData] = await Promise.all([
     getIdeaById(id),
     getIdeaComments(id),
     getCurrentUserProfile(),
+    getIdeaValidationData(id),
   ]);
 
   if (!idea) {
@@ -34,6 +35,7 @@ export default async function IdeaPage({
       idea={idea}
       initialComments={comments}
       currentUser={currentUser}
+      initialValidationData={validationData}
     />
   );
 }

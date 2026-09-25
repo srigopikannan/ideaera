@@ -50,12 +50,24 @@ export function IdeaCard({ idea, trending = false }: IdeaCardProps) {
     >
       <div className="space-y-4">
         {/* Category & Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 flex items-center gap-1.5">
-            {trending && <Sparkles className="h-3 w-3 text-indigo-400" />}
-            {idea.category}
-          </span>
-          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 flex items-center gap-1.5">
+              {trending && <Sparkles className="h-3 w-3 text-indigo-400" />}
+              {idea.category}
+            </span>
+            {idea.validation_status === "validated" && (
+              <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[9px] font-mono uppercase tracking-wider">
+                Validated
+              </span>
+            )}
+            {idea.validation_status === "testing" && (
+              <span className="px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 text-[9px] font-mono uppercase tracking-wider">
+                Testing
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest shrink-0">
             {formatTimeAgo(idea.created_at)}
           </span>
         </div>

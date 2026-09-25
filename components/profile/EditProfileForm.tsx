@@ -16,7 +16,7 @@ import {
   suggestCollegeAction,
 } from "@/app/(dashboard)/actions/reference-data";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock, Building, Plus, X } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, User, Globe, MapPin, GraduationCap, Calendar, Lock, Building, Plus, X, Clock } from "lucide-react";
 import { Github, Linkedin } from "@/components/ui/brand-icons";
 
 interface EditProfileFormProps {
@@ -43,6 +43,8 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
   const [linkedinUrl, setLinkedinUrl] = React.useState(initialProfile.linkedin_url || "");
   const [skills, setSkills] = React.useState(initialProfile.skills?.join(", ") || "");
   const [interests, setInterests] = React.useState(initialProfile.interests?.join(", ") || "");
+  const [availability, setAvailability] = React.useState(initialProfile.availability || "Available");
+  const [availabilityHours, setAvailabilityHours] = React.useState(initialProfile.availability_hours || "");
 
   // Auto-resolve college location for existing profiles if missing
   React.useEffect(() => {
@@ -127,6 +129,8 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
     formData.append("linkedin_url", linkedinUrl);
     formData.append("skills", skills);
     formData.append("interests", interests);
+    formData.append("availability", availability);
+    formData.append("availability_hours", availabilityHours);
 
     try {
       const res = await updateProfileAction(formData);
@@ -456,6 +460,49 @@ export function EditProfileForm({ initialProfile }: EditProfileFormProps) {
                 onChange={(e) => setInterests(e.target.value)}
                 placeholder="Autonomous Agents, Clean Energy, Web3, Distributed Systems"
               />
+            </div>
+
+            {/* Collaboration & Availability Section */}
+            <div className="p-4 rounded-2xl border border-border bg-muted/20 space-y-4">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <span>Team & Project Availability</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Let collaborators know when you are open to joining venture teams or hackathons.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground block">
+                    Availability Status
+                  </label>
+                  <select
+                    value={availability}
+                    onChange={(e) => setAvailability(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-input bg-surface text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="Available">Available (Ready to join)</option>
+                    <option value="Available evenings">Available evenings</option>
+                    <option value="Available weekends">Available weekends</option>
+                    <option value="Limited availability">Limited availability</option>
+                    <option value="Not currently available">Not currently available</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground block">
+                    Weekly Commitment / Free Hours
+                  </label>
+                  <Input
+                    placeholder="e.g. 10 hrs/week, free after 6 PM"
+                    value={availabilityHours}
+                    onChange={(e) => setAvailabilityHours(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">

@@ -30,6 +30,8 @@ export interface Profile {
   linkedin_url?: string | null;
   skills?: string[];
   interests?: string[];
+  availability?: string;
+  availability_hours?: string | null;
   created_at: string;
   updated_at: string;
   connection_status?: 'none' | 'pending_sent' | 'pending_received' | 'connected';
@@ -73,6 +75,19 @@ export interface Idea {
   created_at: string;
   updated_at: string;
   is_liked?: boolean;
+  validation_status?: 'not_validated' | 'testing' | 'validated';
+  validation_target_users?: string | null;
+  validation_why_it_matters?: string | null;
+  validation_alternatives?: string | null;
+  validation_expected_benefits?: string | null;
+  validation_questions?: string[];
+  validation_stats?: {
+    total: number;
+    valid: number;
+    needs_work: number;
+    impractical: number;
+    percentage: number;
+  };
 }
   
   export interface IdeaComment {
@@ -106,6 +121,15 @@ export interface Idea {
     technologies?: string[];
     members?: ProjectMember[];
     related_idea_id?: string | null;
+    idea_id?: string | null;
+    needs_help?: boolean;
+    help_category?: string | null;
+    help_description?: string | null;
+    help_requested_at?: string | null;
+    required_skills?: string[];
+    tasks_count?: number;
+    completed_tasks_count?: number;
+    progress?: number;
     created_at: string;
     updated_at: string;
   }
@@ -186,7 +210,11 @@ export type NotificationType =
   | 'idea_like'
   | 'idea_comment'
   | 'project_invite'
-  | 'project_joined';
+  | 'project_joined'
+  | 'project_rescue_invite'
+  | 'task_assigned'
+  | 'task_completed'
+  | 'validation_feedback';
 
 export interface Notification {
   id: string;
@@ -286,5 +314,157 @@ export interface BadgeWithProgress extends Badge {
   current_value: number;
   percentage: number;
 }
+
+export type TaskStatus = 'Todo' | 'In Progress' | 'Review' | 'Completed';
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  milestone_id?: string | null;
+  title: string;
+  description?: string | null;
+  assigned_to?: string | null;
+  assignee?: Profile | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  project_id: string;
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  tasks?: ProjectTask[];
+}
+
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  name: string;
+  url: string;
+  file_type: string;
+  uploaded_by?: string | null;
+  uploader?: Profile | null;
+  created_at: string;
+}
+
+export interface ProjectDiscussion {
+  id: string;
+  project_id: string;
+  user_id: string;
+  user?: Profile | null;
+  content: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ProjectActivity {
+  id: string;
+  project_id: string;
+  user_id?: string | null;
+  user?: Profile | null;
+  action: string;
+  details?: Record<string, any>;
+  created_at: string;
+}
+
+export interface ProjectRescueInvitation {
+  id: string;
+  project_id: string;
+  sender_id: string;
+  receiver_id: string;
+  category: string;
+  message?: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  updated_at?: string;
+  project?: Project;
+  receiver?: Profile;
+}
+
+export interface SkillGapAnalysis {
+  required_skills: string[];
+  team_skills: { skill: string; members: { id: string; name: string; username: string; avatar_url?: string | null }[] }[];
+  skill_gaps: string[];
+  coverage_percentage: number;
+}
+
+export interface IdeaValidationFeedback {
+  id: string;
+  idea_id: string;
+  user_id: string;
+  user?: Profile;
+  vote: 'valid' | 'needs_work' | 'impractical';
+  feedback: string;
+  answers?: Record<string, string>;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface IdeaValidationData {
+  status: 'not_validated' | 'testing' | 'validated';
+  target_users?: string | null;
+  why_it_matters?: string | null;
+  alternatives?: string | null;
+  expected_benefits?: string | null;
+  questions: string[];
+  feedback: IdeaValidationFeedback[];
+  summary: {
+    total: number;
+    valid_count: number;
+    needs_work_count: number;
+    impractical_count: number;
+    positive_percentage: number;
+  };
+}
+
+export interface NextStepRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  category: 'idea' | 'validation' | 'project' | 'skills' | 'rescue' | 'task' | 'hackathon' | 'community';
+  action_label: string;
+  action_url: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface PersonalInnovationDashboard {
+  ideas: {
+    created: Idea[];
+    developing: Idea[];
+    total_count: number;
+    validated_count: number;
+  };
+  projects: {
+    active: Project[];
+    completed: Project[];
+    needs_help: Project[];
+    total_count: number;
+  };
+  team: {
+    member_of: Project[];
+    collaborators_count: number;
+  };
+  hackathons: {
+    joined: Hackathon[];
+    total_count: number;
+  };
+  skills: {
+    profile_skills: string[];
+    project_skills_needed: string[];
+    gap_skills: string[];
+  };
+  badges: any;
+  next_steps: NextStepRecommendation[];
+}
+
 
 

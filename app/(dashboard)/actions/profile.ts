@@ -34,6 +34,12 @@ export async function updateProfileAction(formData: FormData) {
   const interests = rawInterests
     ? rawInterests.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
+  const availability = formData.has("availability")
+    ? (formData.get("availability") as string).trim() || undefined
+    : undefined;
+  const availability_hours = formData.has("availability_hours")
+    ? (formData.get("availability_hours") as string).trim() || undefined
+    : undefined;
 
   const updated = await updateProfile({
     full_name,
@@ -53,6 +59,8 @@ export async function updateProfileAction(formData: FormData) {
     country,
     show_location,
     interests,
+    availability,
+    availability_hours,
   });
 
   revalidatePath("/profile");

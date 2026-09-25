@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/avatar";
-import { User, Settings, LogOut, Moon, Sun } from "lucide-react";
+import { User, Settings, LogOut, Moon, Sun, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
@@ -139,6 +139,15 @@ export function UserMenu({
             >
               <Settings className="h-4 w-4 text-muted-foreground" />
               <span>Settings</span>
+            </Link>
+
+            <Link
+              href="/privacy-center"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-surface-hover transition-colors"
+            >
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <span>Privacy &amp; Legal</span>
             </Link>
 
             <button

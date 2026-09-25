@@ -510,5 +510,18 @@ export interface PersonalInnovationDashboard {
   next_steps: NextStepRecommendation[];
 }
 
+export interface UserConsent {
+  id: string;
+  user_id: string;
+  privacy_policy_version: string;
+  terms_version: string;
+  cookie_policy_version: string;
+  consent_type: 'signup' | 'policy_update' | 're_consent';
+  accepted_at: string;
+  created_at: string;
+  user_agent?: string | null;
+  metadata?: Record<string, any>;
+}
+
 
 

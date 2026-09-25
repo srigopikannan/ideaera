@@ -4,10 +4,26 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { acceptCurrentPoliciesAction } from "@/app/(dashboard)/actions/legal";
+import { CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_VERSION } from "@/lib/legal-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, User, Mail, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import {
+  Sparkles,
+  User,
+  Mail,
+  Lock,
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
+  FileText,
+  Scale,
+  Cookie,
+  ExternalLink,
+} from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -15,6 +31,8 @@ export default function SignupPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [hasAgreed, setHasAgreed] = React.useState(false); // MUST NOT be pre-selected
+  const [isRejected, setIsRejected] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [successNotice, setSuccessNotice] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -32,10 +50,21 @@ export default function SignupPage() {
 
   const passwordScore = getPasswordStrength(password);
 
+  const handleReject = () => {
+    setIsRejected(true);
+    setError(null);
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessNotice(null);
+
+    // Enforce active affirmative consent check
+    if (!hasAgreed) {
+      setError("You must review and check the agreement box for the Privacy Policy and Terms of Service before creating an account.");
+      return;
+    }
 
     // Validation
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -75,12 +104,20 @@ export default function SignupPage() {
         return;
       }
 
-      // Check if user already exists (Supabase returns identities: [] to protect against email enumeration)
+      // Record immutable legal consent record with database/server timestamp
+      if (data?.user?.id) {
+        try {
+          await acceptCurrentPoliciesAction("signup", data.user.id);
+        } catch (consentErr) {
+          console.warn("Failed to record signup consent:", consentErr);
+        }
+      }
+
+      // Check if user already exists
       const isExistingUser = data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
 
       if (isExistingUser) {
-        // Attempt automatic login with the provided credentials
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
@@ -95,14 +132,14 @@ export default function SignupPage() {
         }
 
         setError(
-          "Your account is already registered and verified! You do not need a confirmation email. Please sign in with your password below."
+          "Your account is already registered and verified! Please sign in with your password below."
         );
         setIsLoading(false);
         return;
       }
 
       if (data?.user && !data.session) {
-        setSuccessNotice("Verification link sent! Please check your email inbox (and spam folder) to confirm your account.");
+        setSuccessNotice("Verification link sent! Please check your email inbox to confirm your account.");
         setIsLoading(false);
       } else {
         router.push("/onboarding");
@@ -115,6 +152,11 @@ export default function SignupPage() {
   };
 
   const handleGoogleSignup = async () => {
+    if (!hasAgreed) {
+      setError("Please review and check the agreement box for the Privacy Policy and Terms of Service before continuing with Google.");
+      return;
+    }
+
     setIsGoogleLoading(true);
     setError(null);
 
@@ -158,169 +200,288 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <Card className="border-border shadow-elevated bg-surface/95 backdrop-blur-md">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl">Create your account</CardTitle>
-            <CardDescription>
-              Start discovering collaborators, ideas, and hackathons
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-lg bg-error/10 border border-error/20 flex items-start gap-2.5 text-error text-sm">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{error}</span>
+        {/* Section 7: Reject State Screen */}
+        {isRejected ? (
+          <Card className="border-border shadow-elevated bg-surface/95 backdrop-blur-md">
+            <CardHeader className="text-center pb-2">
+              <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 mx-auto flex items-center justify-center mb-2">
+                <ShieldAlert className="h-6 w-6" />
               </div>
-            )}
+              <CardTitle className="text-xl">Consent Required</CardTitle>
+              <CardDescription className="text-rose-300 font-light pt-1">
+                Acceptance of the Privacy Policy and Terms of Service is required to create an IdeaEra account.
+              </CardDescription>
+            </CardHeader>
 
-            {successNotice && (
-              <div className="p-3.5 rounded-lg bg-success/10 border border-success/20 flex items-start gap-2.5 text-success text-sm">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{successNotice}</span>
-              </div>
-            )}
+            <CardContent className="space-y-4 pt-2 text-xs text-neutral-300 font-light leading-relaxed">
+              <p>
+                IdeaEra provides collaborative project workspaces, verified skill credentials, and collegiate hackathons. To operate these services safely and protect creator rights, all members must accept our core legal agreements.
+              </p>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-11 relative flex items-center justify-center gap-3 border-border font-medium hover:bg-surface-hover transition-colors"
-              onClick={handleGoogleSignup}
-              isLoading={isGoogleLoading}
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  fill="#EA4335"
-                />
-              </svg>
-              Sign up with Google
-            </Button>
-
-            <div className="relative my-3">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-surface px-2 text-muted-foreground font-medium">
-                  Or register with email
-                </span>
-              </div>
-            </div>
-
-            <form onSubmit={handleSignup} className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1 block">
-                  Full Name
-                </label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Srigopi kannan"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  leftIcon={<User className="h-4 w-4" />}
-                  required
-                />
+              <div className="p-3.5 rounded-xl border border-white/10 bg-[#0d1017] space-y-2">
+                <div className="font-medium text-white flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Review Our Legal Documents:</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-indigo-400 font-mono text-[11px]">
+                  <Link href="/privacy" target="_blank" className="hover:underline flex items-center gap-0.5">
+                    Privacy Policy (v{CURRENT_PRIVACY_POLICY_VERSION}) <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                  <span>•</span>
+                  <Link href="/terms" target="_blank" className="hover:underline flex items-center gap-0.5">
+                    Terms of Service (v{CURRENT_TERMS_VERSION}) <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                  <span>•</span>
+                  <Link href="/cookies" target="_blank" className="hover:underline flex items-center gap-0.5">
+                    Cookie Policy <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1 block">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  leftIcon={<Mail className="h-4 w-4" />}
-                  required
-                />
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                <Link href="/privacy-center" target="_blank" className="flex-1">
+                  <Button variant="outline" className="w-full text-xs h-10 border-border">
+                    Review Policies
+                  </Button>
+                </Link>
+                <Button
+                  onClick={() => setIsRejected(false)}
+                  className="flex-1 text-xs h-10 bg-indigo-600 hover:bg-indigo-500 text-white"
+                >
+                  Back to Sign Up
+                </Button>
               </div>
+            </CardContent>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1 block">
-                  Password
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Minimum 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  leftIcon={<Lock className="h-4 w-4" />}
-                  required
-                />
-                {password && (
-                  <div className="mt-1.5 space-y-1">
-                    <div className="flex gap-1 h-1">
-                      {[1, 2, 3, 4].map((step) => (
-                        <div
-                          key={step}
-                          className={`h-full flex-1 rounded-full transition-colors ${
-                            passwordScore >= step
-                              ? passwordScore <= 2
-                                ? "bg-warning"
-                                : "bg-success"
-                              : "bg-muted"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <ShieldCheck className="h-3 w-3" />
-                      {passwordScore <= 2
-                        ? "Moderate password strength"
-                        : "Strong password"}
-                    </p>
-                  </div>
-                )}
-              </div>
+            <CardFooter className="flex justify-center border-t border-border pt-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Decided not to sign up? Return to{" "}
+                <Link href="/" className="text-primary font-semibold hover:underline">
+                  Homepage
+                </Link>
+              </p>
+            </CardFooter>
+          </Card>
+        ) : (
+          /* Normal Sign Up Form */
+          <Card className="border-border shadow-elevated bg-surface/95 backdrop-blur-md">
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-xl">Create your account</CardTitle>
+              <CardDescription>
+                Start discovering collaborators, ideas, and hackathons
+              </CardDescription>
+            </CardHeader>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1 block">
-                  Confirm Password
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  leftIcon={<Lock className="h-4 w-4" />}
-                  required
-                />
-              </div>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="p-3 rounded-lg bg-error/10 border border-error/20 flex items-start gap-2.5 text-error text-sm">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {successNotice && (
+                <div className="p-3.5 rounded-lg bg-success/10 border border-success/20 flex items-start gap-2.5 text-success text-sm">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{successNotice}</span>
+                </div>
+              )}
 
               <Button
-                type="submit"
-                variant="default"
-                className="w-full h-11 text-sm font-semibold shadow-card mt-3"
-                isLoading={isLoading}
+                type="button"
+                variant="outline"
+                className="w-full h-11 relative flex items-center justify-center gap-3 border-border font-medium hover:bg-surface-hover transition-colors"
+                onClick={handleGoogleSignup}
+                isLoading={isGoogleLoading}
               >
-                Create Free Account <ArrowRight className="h-4 w-4 ml-1" />
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    fill="#EA4335"
+                  />
+                </svg>
+                Sign up with Google
               </Button>
-            </form>
-          </CardContent>
 
-          <CardFooter className="flex justify-center border-t border-border pt-4 text-center">
-            <p className="text-xs text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="text-primary font-semibold hover:underline">
-                Sign in here
-              </Link>
-            </p>
-          </CardFooter>
-        </Card>
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-surface px-2 text-muted-foreground font-medium">
+                    Or register with email
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSignup} className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1 block">
+                    Full Name
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Srigopi kannan"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    leftIcon={<User className="h-4 w-4" />}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1 block">
+                    Email Address
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    leftIcon={<Mail className="h-4 w-4" />}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1 block">
+                    Password
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Minimum 8 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    leftIcon={<Lock className="h-4 w-4" />}
+                    required
+                  />
+                  {password && (
+                    <div className="mt-1.5 space-y-1">
+                      <div className="flex gap-1 h-1">
+                        {[1, 2, 3, 4].map((step) => (
+                          <div
+                            key={step}
+                            className={`h-full flex-1 rounded-full transition-colors ${
+                              passwordScore >= step
+                                ? passwordScore <= 2
+                                  ? "bg-warning"
+                                  : "bg-success"
+                                : "bg-muted"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <ShieldCheck className="h-3 w-3" />
+                        {passwordScore <= 2
+                          ? "Moderate password strength"
+                          : "Strong password"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1 block">
+                    Confirm Password
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    leftIcon={<Lock className="h-4 w-4" />}
+                    required
+                  />
+                </div>
+
+                {/* Section 5: Required Legal Consent Screen Box */}
+                <div className="p-3.5 rounded-2xl border border-indigo-500/25 bg-indigo-500/[0.03] space-y-2.5 pt-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium text-white">Before creating your IdeaEra account</p>
+                    <p className="text-[11px] text-neutral-400 font-light leading-relaxed">
+                      Please review the IdeaEra{" "}
+                      <Link href="/privacy" target="_blank" className="text-indigo-400 hover:underline font-medium">
+                        Privacy Policy
+                      </Link>{" "}
+                      and{" "}
+                      <Link href="/terms" target="_blank" className="text-indigo-400 hover:underline font-medium">
+                        Terms of Service
+                      </Link>
+                      .
+                    </p>
+                  </div>
+
+                  {/* Active Non-Preselected Affirmative Checkbox */}
+                  <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-white/[0.02] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={hasAgreed}
+                      onChange={(e) => {
+                        setHasAgreed(e.target.checked);
+                        if (error) setError(null);
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/40 text-indigo-500 focus:ring-indigo-400 cursor-pointer"
+                    />
+                    <span className="text-xs text-neutral-200 font-light leading-relaxed">
+                      I have read and agree to the Privacy Policy and Terms of Service.
+                    </span>
+                  </label>
+
+                  <p className="text-[10px] text-neutral-400 font-light leading-relaxed border-t border-white/5 pt-2 m-0">
+                    IdeaEra also uses necessary authentication and security technologies required to provide secure account access and core platform functionality. See our{" "}
+                    <Link href="/cookies" target="_blank" className="text-indigo-400 hover:underline">
+                      Cookie Policy
+                    </Link>
+                    .
+                  </p>
+                </div>
+
+                {/* Dual Action Buttons: [ Accept & Create Account ] and [ Reject ] */}
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                  <Button
+                    type="submit"
+                    variant="default"
+                    className="w-full sm:flex-1 h-11 text-xs font-semibold shadow-card bg-indigo-600 hover:bg-indigo-500 text-white"
+                    isLoading={isLoading}
+                  >
+                    Accept &amp; Create Account <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleReject}
+                    className="w-full sm:w-auto h-11 px-4 text-xs text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+
+            <CardFooter className="flex justify-center border-t border-border pt-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Already have an account?{" "}
+                <Link href="/login" className="text-primary font-semibold hover:underline">
+                  Sign in here
+                </Link>
+              </p>
+            </CardFooter>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -81,13 +81,23 @@ export function LandingFooter() {
                 </a>
               </li>
               <li>
-                <Link href="/settings" className="hover:text-white transition-colors">
+                <Link href="/privacy" className="hover:text-white transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/settings" className="hover:text-white transition-colors">
+                <Link href="/terms" className="hover:text-white transition-colors">
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/cookies" className="hover:text-white transition-colors">
+                  Cookie Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy-center" className="hover:text-white transition-colors text-indigo-400">
+                  Privacy Center
                 </Link>
               </li>
             </ul>

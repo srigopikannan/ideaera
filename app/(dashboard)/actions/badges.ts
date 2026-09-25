@@ -30,6 +30,49 @@ export async function evaluateMyBadgesAction() {
   }
 }
 
+export async function recalculateBadgesAction(targetUserId?: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const uid = targetUserId || user.id;
+    const result = await evaluateUserBadges(uid);
+    revalidatePath("/profile");
+    revalidatePath("/dashboard");
+    return result;
+  } catch (err: any) {
+    console.error("Error in recalculateBadgesAction:", err);
+    return { success: false, error: err?.message || "Failed to recalculate badges" };
+  }
+}
+
+export async function getBadgeAuditLogsAction(userId?: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const { getUserBadgeAuditLogs } = await import("@/services/badges");
+    const uid = userId || user.id;
+    const logs = await getUserBadgeAuditLogs(uid);
+    return { success: true, data: logs };
+  } catch (err: any) {
+    console.error("Error in getBadgeAuditLogsAction:", err);
+    return { success: false, error: err?.message || "Failed to fetch audit logs" };
+  }
+}
+
 export async function getUserBadgesAction(userId: string) {
   try {
     const supabase = await createClient();

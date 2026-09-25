@@ -315,6 +315,50 @@ export interface BadgeWithProgress extends Badge {
   percentage: number;
 }
 
+export interface BadgeAuditLog {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  action: 'awarded' | 'revoked';
+  reason: string;
+  metrics_snapshot: Record<string, any>;
+  created_at: string;
+  badge?: Badge;
+}
+
+export interface UserActivityMetrics {
+  ideas_count: number;
+  projects_count: number;
+  connections_count: number;
+  hackathons_count: number;
+  team_contributions_count?: number;
+  completed_tasks_count?: number;
+}
+
+export interface BadgeEvaluationResult {
+  success: boolean;
+  metrics: UserActivityMetrics;
+  newly_awarded: Array<{
+    badge_id: string;
+    name: string;
+    slug: string;
+    tier: string;
+  }>;
+  revoked: Array<{
+    badge_id: string;
+    name: string;
+    slug: string;
+    tier: string;
+    reason: string;
+  }>;
+  currently_valid: Array<{
+    badge_id: string;
+    name: string;
+    slug: string;
+    tier: string;
+  }>;
+}
+
 export type TaskStatus = 'Todo' | 'In Progress' | 'Review' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 

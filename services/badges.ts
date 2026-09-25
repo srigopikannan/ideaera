@@ -1,12 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
-import { Badge, BadgeWithProgress, UserBadge } from "@/types";
+import {
+  Badge,
+  BadgeWithProgress,
+  UserBadge,
+  BadgeAuditLog,
+  UserActivityMetrics,
+  BadgeEvaluationResult,
+} from "@/types";
 
-export interface UserActivityMetrics {
-  ideas_count: number;
-  projects_count: number;
-  connections_count: number;
-  hackathons_count: number;
-}
+export type { UserActivityMetrics, BadgeEvaluationResult };
 
 export interface BadgeSummary {
   total_earned: number;
@@ -32,73 +34,105 @@ export interface UserBadgesResult {
 export async function calculateUserMetrics(userId: string): Promise<UserActivityMetrics> {
   const supabase = await createClient();
 
-  const [ideasRes, projectsRes, connsRes, hackathonsRes] = await Promise.all([
-    supabase
-      .from("ideas")
-      .select("id", { count: "exact", head: true })
-      .eq("creator_id", userId)
-      .not("title", "is", null),
-    supabase
-      .from("projects")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", userId)
-      .not("name", "is", null),
-    supabase
-      .from("connections")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "accepted")
-      .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`),
-    supabase
-      .from("hackathons")
-      .select("id", { count: "exact", head: true })
-      .eq("organizer_id", userId),
-  ]);
+  const [ideasRes, projectsRes, connsRes, hackathonRegsRes, hackathonsOrganizedRes, teamRes, tasksRes] =
+    await Promise.all([
+      supabase
+        .from("ideas")
+        .select("id", { count: "exact", head: true })
+        .eq("creator_id", userId)
+        .not("title", "is", null),
+      supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId)
+        .not("name", "is", null),
+      supabase
+        .from("connections")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "accepted")
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`),
+      supabase
+        .from("hackathon_registrations")
+        .select("hackathon_id", { count: "exact", head: true })
+        .eq("user_id", userId),
+      supabase
+        .from("hackathons")
+        .select("id", { count: "exact", head: true })
+        .eq("organizer_id", userId),
+      supabase
+        .from("project_members")
+        .select("project_id", { count: "exact", head: true })
+        .eq("user_id", userId),
+      supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_to", userId)
+        .eq("status", "Completed"),
+    ]);
+
+  const hackathonsCount = (hackathonRegsRes.count || 0) + (hackathonsOrganizedRes.count || 0);
 
   return {
     ideas_count: ideasRes.count || 0,
     projects_count: projectsRes.count || 0,
     connections_count: connsRes.count || 0,
-    hackathons_count: hackathonsRes.count || 0,
+    hackathons_count: hackathonsCount,
+    team_contributions_count: teamRes.count || 0,
+    completed_tasks_count: tasksRes.count || 0,
   };
 }
 
 /**
- * Evaluates active badges against user metrics and awards newly earned badges.
- * Idempotent: previously awarded badges will not be duplicated.
+ * Evaluates active badges against CURRENT real user metrics.
+ * - Awards missing badges when criteria are met
+ * - Revokes badges when criteria are no longer met (due to deletion/modification)
+ * - Logs every award and revocation with audit evidence
+ * - Automatically keeps notifications in sync
  */
-export async function evaluateUserBadges(userId: string): Promise<{
-  success: boolean;
-  metrics: UserActivityMetrics;
-  newly_awarded: Array<{
-    badge_id: string;
-    name: string;
-    slug: string;
-    tier: string;
-  }>;
-}> {
+export async function evaluateUserBadges(userId: string): Promise<BadgeEvaluationResult> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc("evaluate_and_award_user_badges", {
+    
+    // Execute evaluate_and_sync_user_badges RPC in database
+    let { data, error } = await supabase.rpc("evaluate_and_sync_user_badges", {
       target_user_id: userId,
     });
 
     if (error) {
-      console.error("Error executing evaluate_and_award_user_badges RPC:", error);
+      // Fallback attempt to evaluate_and_award_user_badges
+      const fb = await supabase.rpc("evaluate_and_award_user_badges", {
+        target_user_id: userId,
+      });
+      data = fb.data;
+      error = fb.error;
+    }
+
+    if (error) {
+      console.error("Error executing evaluate_and_sync_user_badges RPC:", error);
       const metrics = await calculateUserMetrics(userId);
       return {
         success: false,
         metrics,
         newly_awarded: [],
+        revoked: [],
+        currently_valid: [],
       };
     }
 
-    return (
-      data || {
-        success: true,
-        metrics: { ideas_count: 0, projects_count: 0, connections_count: 0, hackathons_count: 0 },
-        newly_awarded: [],
-      }
-    );
+    return {
+      success: true,
+      metrics: data?.metrics || {
+        ideas_count: 0,
+        projects_count: 0,
+        connections_count: 0,
+        hackathons_count: 0,
+        team_contributions_count: 0,
+        completed_tasks_count: 0,
+      },
+      newly_awarded: data?.newly_awarded || [],
+      revoked: data?.revoked || [],
+      currently_valid: data?.currently_valid || [],
+    };
   } catch (err) {
     console.error("evaluateUserBadges exception:", err);
     const metrics = await calculateUserMetrics(userId);
@@ -106,12 +140,15 @@ export async function evaluateUserBadges(userId: string): Promise<{
       success: false,
       metrics,
       newly_awarded: [],
+      revoked: [],
+      currently_valid: [],
     };
   }
 }
 
 /**
  * Fetches all active badges with real progress information for a user.
+ * Always triggers server-side re-evaluation to ensure 100% current validity.
  */
 export async function getUserBadgesWithProgress(
   userId: string,
@@ -119,13 +156,11 @@ export async function getUserBadgesWithProgress(
 ): Promise<UserBadgesResult> {
   const supabase = await createClient();
 
-  // If current user is loading profile, trigger evaluation to ensure latest awards are up to date
-  if (isCurrentUser) {
-    try {
-      await evaluateUserBadges(userId);
-    } catch (e) {
-      console.warn("User badge evaluation during fetch failed:", e);
-    }
+  // Re-evaluate on every fetch so profiles ALWAYS display CURRENT valid achievements
+  try {
+    await evaluateUserBadges(userId);
+  } catch (e) {
+    console.warn("User badge evaluation during fetch failed:", e);
   }
 
   // Fetch active badges and user's earned badges in parallel
@@ -171,8 +206,14 @@ export async function getUserBadgesWithProgress(
     } else if (badge.criteria_type === "hackathons_count") {
       currentValue = metrics.hackathons_count;
       percentage = Math.min(100, Math.round((currentValue / badge.criteria_value) * 100));
+    } else if (badge.criteria_type === "team_contributions") {
+      currentValue = metrics.team_contributions_count || 0;
+      percentage = Math.min(100, Math.round((currentValue / badge.criteria_value) * 100));
     } else if (badge.criteria_type === "composite") {
-      if (badge.slug === "high-performer") {
+      if (badge.slug === "active-innovator") {
+        currentValue = Math.max(metrics.ideas_count, metrics.projects_count);
+        percentage = currentValue >= 1 ? 100 : 0;
+      } else if (badge.slug === "high-performer") {
         const ideasPart = Math.min(1, metrics.ideas_count / 2) * 50;
         const projectsPart = Math.min(1, metrics.projects_count / 1) * 50;
         currentValue = Math.min(2, metrics.ideas_count) + Math.min(1, metrics.projects_count);
@@ -242,6 +283,23 @@ export async function getUserBadgesWithProgress(
       metrics,
     },
   };
+}
+
+/**
+ * Fetches the complete immutable audit trail of badge awards and revocations for a user.
+ */
+export async function getUserBadgeAuditLogs(userId: string): Promise<BadgeAuditLog[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("badge_audit_logs")
+    .select("*, badge:badges(*)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+  return data as any[];
 }
 
 /**

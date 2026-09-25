@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Hackathon } from "@/types";
+import { evaluateUserBadges } from "@/services/badges";
 
 function parseHackathonData(h: any): Hackathon {
   let organizer = "Community Organizer";
@@ -295,6 +296,8 @@ export async function createHackathon(params: {
   if (error) {
     throw new Error(error.message);
   }
+
+  evaluateUserBadges(user.id).catch(console.warn);
 
   return parseHackathonData(data);
 }

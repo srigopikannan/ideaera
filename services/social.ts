@@ -291,10 +291,8 @@ export async function updateConnectionStatus(
   // Synchronize and update all notifications associated with this connection
   await syncConnectionNotifications(connectionId, status, connection.requester_id, connection.receiver_id);
 
-  if (status === "accepted") {
-    evaluateUserBadges(connection.requester_id).catch(console.warn);
-    evaluateUserBadges(connection.receiver_id).catch(console.warn);
-  }
+  evaluateUserBadges(connection.requester_id).catch(console.warn);
+  evaluateUserBadges(connection.receiver_id).catch(console.warn);
 }
 
 /**
@@ -389,6 +387,13 @@ export async function removeConnection(connectionId: string): Promise<void> {
     throw new Error("You must be logged in to disconnect.");
   }
 
+  // Fetch connection to obtain party ids for badge re-evaluation
+  const { data: conn } = await supabase
+    .from("connections")
+    .select("requester_id, receiver_id")
+    .eq("id", connectionId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("connections")
     .delete()
@@ -397,6 +402,16 @@ export async function removeConnection(connectionId: string): Promise<void> {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // Automatically re-evaluate badges for both users since connection count changed
+  if (conn) {
+    evaluateUserBadges(conn.requester_id).catch((err) =>
+      console.warn("Badge re-evaluation on removeConnection requester error:", err)
+    );
+    evaluateUserBadges(conn.receiver_id).catch((err) =>
+      console.warn("Badge re-evaluation on removeConnection receiver error:", err)
+    );
   }
 }
 

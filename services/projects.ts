@@ -327,6 +327,10 @@ export async function updateProject(
 
   await logProjectActivity(id, user.id, "updated_project", { name: updated.name });
 
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge re-evaluation on updateProject error:", err)
+  );
+
   return mapProject(updated);
 }
 
@@ -354,6 +358,13 @@ export async function deleteProject(id: string): Promise<void> {
     throw new Error("Unauthorized: You do not have permission to delete this project.");
   }
 
+  // Collect team member ids before deleting records
+  const { data: memberRows } = await supabase
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", id);
+  const memberUserIds = memberRows ? memberRows.map((m) => m.user_id) : [];
+
   await Promise.allSettled([
     supabase.from("project_members").delete().eq("project_id", id),
     supabase.from("tasks").delete().eq("project_id", id),
@@ -372,6 +383,18 @@ export async function deleteProject(id: string): Promise<void> {
 
   if (deleteErr) {
     throw new Error(deleteErr.message || "Failed to delete project.");
+  }
+
+  // Automatically re-evaluate user badges for owner and impacted members
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge re-evaluation on deleteProject owner error:", err)
+  );
+  for (const mid of memberUserIds) {
+    if (mid && mid !== user.id) {
+      evaluateUserBadges(mid).catch((err) =>
+        console.warn("Badge re-evaluation on deleteProject member error:", err)
+      );
+    }
   }
 }
 
@@ -475,6 +498,10 @@ export async function leaveProject(projectId: string): Promise<void> {
   }
 
   await logProjectActivity(projectId, user.id, "left_project");
+
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge re-evaluation on leaveProject error:", err)
+  );
 }
 
 /* =========================================================================

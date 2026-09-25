@@ -341,6 +341,8 @@ export async function updateIdea(
     throw new Error("Failed to update idea.");
   }
 
+  evaluateUserBadges(user.id).catch(console.warn);
+
   return mapIdea(updated);
 }
 
@@ -501,6 +503,11 @@ export async function deleteIdea(id: string): Promise<void> {
   if (deleteErr) {
     throw new Error(deleteErr.message || "Failed to delete idea.");
   }
+
+  // Automatically re-evaluate user badges to revoke/update achievements upon idea deletion
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge re-evaluation on deleteIdea error:", err)
+  );
 }
 
 /* =========================================================================

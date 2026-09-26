@@ -15,17 +15,24 @@ export default async function LoginPage({
 }: {
   searchParams?: Promise<{ redirectedFrom?: string; error?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const resolvedParams = searchParams ? await searchParams : undefined;
-  const destination = resolvedParams?.redirectedFrom || "/dashboard";
+    const resolvedParams = searchParams ? await searchParams : undefined;
+    const destination = resolvedParams?.redirectedFrom || "/dashboard";
 
-  // If already authenticated with a valid session, redirect immediately
-  if (user) {
-    redirect(destination.startsWith("/") ? destination : "/dashboard");
+    // If already authenticated with a valid session, redirect immediately
+    if (user) {
+      redirect(destination.startsWith("/") ? destination : "/dashboard");
+    }
+  } catch (err: any) {
+    if (err?.digest?.startsWith("NEXT_REDIRECT")) {
+      throw err;
+    }
+    // If Supabase client fails or is unconfigured, proceed to render LoginForm safely
   }
 
   return (

@@ -18,13 +18,10 @@ export async function createClient() {
     "";
   const supabaseAnonKey = rawKey.trim().replace(/^["']|["']$/g, "");
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Supabase server client initialized without SUPABASE_URL or SUPABASE_ANON_KEY.");
-    }
-  }
+  const activeUrl = supabaseUrl || "https://placeholder.supabase.co";
+  const activeKey = supabaseAnonKey || "placeholder-anon-key";
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(activeUrl, activeKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

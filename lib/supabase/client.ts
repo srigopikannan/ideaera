@@ -11,13 +11,10 @@ export function createClient() {
     "";
   const supabaseAnonKey = rawKey.trim().replace(/^["']|["']$/g, "");
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Supabase client initialized without NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-    }
-  }
+  const activeUrl = supabaseUrl || "https://placeholder.supabase.co";
+  const activeKey = supabaseAnonKey || "placeholder-anon-key";
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  return createBrowserClient(activeUrl, activeKey, {
     cookies: {
       getAll() {
         if (typeof document === "undefined") return [];

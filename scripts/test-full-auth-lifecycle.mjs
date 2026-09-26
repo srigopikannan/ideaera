@@ -45,7 +45,7 @@ const pgClient = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthori
 await pgClient.connect();
 
 const testTimestamp = Date.now();
-const testEmail = `ideaera.automated.test.${testTimestamp}@example.com`;
+const testEmail = `ideaera.automated.test.${testTimestamp}@gmail.com`;
 const testPassword = "StrongTestPassword123!@#";
 const testFullName = `Automated Tester ${testTimestamp}`;
 let activeEmail = testEmail;

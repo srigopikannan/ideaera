@@ -329,11 +329,29 @@ export interface BadgeAuditLog {
 export interface UserActivityMetrics {
   ideas_count: number;
   projects_count: number;
+  completed_projects_count?: number;
   connections_count: number;
   hackathons_count: number;
   team_contributions_count?: number;
   completed_tasks_count?: number;
 }
+
+export interface TierProgressionRequirement {
+  label: string;
+  current: number;
+  target: number;
+  satisfied: boolean;
+}
+
+export interface TierProgression {
+  currentTier: 'none' | 'bronze' | 'silver' | 'gold';
+  currentTierLabel: string;
+  nextTier: 'bronze' | 'silver' | 'gold' | null;
+  nextTierLabel: string | null;
+  progressPercentage: number;
+  requirementsToNextTier: TierProgressionRequirement[];
+}
+
 
 export interface BadgeEvaluationResult {
   success: boolean;

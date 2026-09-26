@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { BadgeWithProgress } from "@/types";
 import { UserBadgesResult } from "@/services/badges";
+import { recalculateBadgesAction } from "@/app/(dashboard)/actions/badges";
 import {
   BadgeDetailModal,
   getBadgeIconComponent,
@@ -18,6 +20,7 @@ import {
   Shield,
   Layers,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,8 +35,22 @@ export function AchievementsSection({
   badgesResult,
   isCurrentUser,
 }: AchievementsSectionProps) {
+  const router = useRouter();
   const [selectedBadge, setSelectedBadge] = React.useState<BadgeWithProgress | null>(null);
   const [activeFilter, setActiveFilter] = React.useState<FilterTab>("all");
+  const [isSyncing, setIsSyncing] = React.useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await recalculateBadgesAction();
+      router.refresh();
+    } catch (e) {
+      console.error("Failed to re-evaluate badges:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (!badgesResult || !badgesResult.all || badgesResult.all.length === 0) {
     return null;
@@ -61,7 +78,7 @@ export function AchievementsSection({
 
   return (
     <div className="space-y-6">
-      {/* Header with Title and Prestige Summary */}
+      {/* Header with Title, Prestige Summary, and Sync Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -75,8 +92,20 @@ export function AchievementsSection({
           </p>
         </div>
 
-        {/* Quick Prestige Tag */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {/* Quick Prestige Tag & Sync button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {isCurrentUser && (
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              title="Verify & synchronize badges with current activity"
+              className="px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-mono flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-3 w-3 text-neutral-400", isSyncing && "animate-spin text-white")} />
+              <span>{isSyncing ? "Verifying..." : "Verify Badges"}</span>
+            </button>
+          )}
+
           <div className="px-3.5 py-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-mono flex items-center gap-2">
             <Sparkles className="h-3.5 w-3.5 text-amber-400" />
             <span className="font-semibold">{summary.prestige_score}</span>
@@ -132,6 +161,126 @@ export function AchievementsSection({
           </div>
         </div>
       </div>
+
+      {/* Tier Progression & Roadmap Banner */}
+      {summary.tier_progression && (
+        <div className="p-5 rounded-3xl border border-white/10 bg-[#0a0c13] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-indigo-400" />
+                <span className="text-xs font-mono uppercase tracking-wider text-neutral-400">
+                  Current Innovation Tier
+                </span>
+              </div>
+              <div className="text-base sm:text-lg font-medium text-white flex items-center gap-2">
+                <span>{summary.tier_progression.currentTierLabel}</span>
+                {summary.tier_progression.currentTier === "gold" && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                    Highest Honor
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {summary.tier_progression.nextTier ? (
+              <div className="flex flex-col sm:items-end gap-1">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                  Target: {summary.tier_progression.nextTierLabel}
+                </span>
+                <span className="text-xs font-mono font-semibold text-indigo-400">
+                  {summary.tier_progression.progressPercentage}% Completed
+                </span>
+              </div>
+            ) : (
+              <div className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-300 text-xs font-mono">
+                Top Performer Achieved
+              </div>
+            )}
+          </div>
+
+          {/* Tier Milestones Step Indicator */}
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <div
+              className={cn(
+                "p-3 rounded-2xl border text-center transition-all",
+                summary.tier_progression.currentTier === "bronze" ||
+                  summary.tier_progression.currentTier === "silver" ||
+                  summary.tier_progression.currentTier === "gold"
+                  ? "bg-orange-500/10 border-orange-500/40 text-orange-200"
+                  : "bg-white/[0.02] border-white/5 text-neutral-500"
+              )}
+            >
+              <div className="text-[10px] font-mono uppercase tracking-wider">Tier 1</div>
+              <div className="text-xs font-medium mt-0.5">Active Innovator</div>
+            </div>
+
+            <div
+              className={cn(
+                "p-3 rounded-2xl border text-center transition-all",
+                summary.tier_progression.currentTier === "silver" ||
+                  summary.tier_progression.currentTier === "gold"
+                  ? "bg-slate-300/10 border-slate-300/40 text-slate-100"
+                  : "bg-white/[0.02] border-white/5 text-neutral-500"
+              )}
+            >
+              <div className="text-[10px] font-mono uppercase tracking-wider">Tier 2</div>
+              <div className="text-xs font-medium mt-0.5">High Performer</div>
+            </div>
+
+            <div
+              className={cn(
+                "p-3 rounded-2xl border text-center transition-all",
+                summary.tier_progression.currentTier === "gold"
+                  ? "bg-amber-500/15 border-amber-400/50 text-amber-200"
+                  : "bg-white/[0.02] border-white/5 text-neutral-500"
+              )}
+            >
+              <div className="text-[10px] font-mono uppercase tracking-wider">Tier 3</div>
+              <div className="text-xs font-medium mt-0.5">Top Performer</div>
+            </div>
+          </div>
+
+          {/* Next Tier Checklist / Requirements */}
+          {summary.tier_progression.nextTier &&
+            summary.tier_progression.requirementsToNextTier.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-mono text-neutral-400">
+                  <span className="uppercase tracking-wider">
+                    Requirements to unlock {summary.tier_progression.nextTierLabel}:
+                  </span>
+                  <span>{summary.tier_progression.progressPercentage}%</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                  {summary.tier_progression.requirementsToNextTier.map((req, idx) => (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-xl border",
+                        req.satisfied
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                          : "bg-black/20 border-white/5 text-neutral-400"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        {req.satisfied ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        ) : (
+                          <Lock className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+                        )}
+                        <span className="truncate">{req.label}</span>
+                      </div>
+                      <span className="shrink-0 font-medium ml-2">
+                        {req.current} / {req.target}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs font-mono">

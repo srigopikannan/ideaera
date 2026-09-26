@@ -41,7 +41,24 @@ export async function recalculateBadgesAction(targetUserId?: string) {
       return { success: false, error: "Not authenticated" };
     }
 
-    const uid = targetUserId || user.id;
+    let uid = user.id;
+    if (targetUserId && targetUserId !== user.id) {
+      const { data: callerProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (callerProfile?.role === "admin" || user.app_metadata?.role === "admin") {
+        uid = targetUserId;
+      } else {
+        return {
+          success: false,
+          error: "Unauthorized: only administrators can recalculate other users' achievements.",
+        };
+      }
+    }
+
     const result = await evaluateUserBadges(uid);
     revalidatePath("/profile");
     revalidatePath("/dashboard");
@@ -63,8 +80,25 @@ export async function getBadgeAuditLogsAction(userId?: string) {
       return { success: false, error: "Not authenticated" };
     }
 
+    let uid = user.id;
+    if (userId && userId !== user.id) {
+      const { data: callerProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (callerProfile?.role === "admin" || user.app_metadata?.role === "admin") {
+        uid = userId;
+      } else {
+        return {
+          success: false,
+          error: "Unauthorized: audit logs are restricted to your own profile.",
+        };
+      }
+    }
+
     const { getUserBadgeAuditLogs } = await import("@/services/badges");
-    const uid = userId || user.id;
     const logs = await getUserBadgeAuditLogs(uid);
     return { success: true, data: logs };
   } catch (err: any) {

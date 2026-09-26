@@ -63,10 +63,18 @@ async function run() {
     assert(initRes.success === true, "Initial evaluation executed successfully");
     assert(initRes.metrics.ideas_count === 0, "User starts with 0 ideas");
 
-    // Insert 1 qualifying idea
+    // Insert 1 qualifying substantive idea
     const { rows: idea1 } = await client.query(`
-      INSERT INTO public.ideas (title, problem, solution, description, category, creator_id)
-      VALUES ('Test Autoeval Idea 1', 'Problem 1', 'Solution 1', 'Desc 1', 'AI & Machine Learning', $1)
+      INSERT INTO public.ideas (title, problem, solution, description, category, creator_id, validation_status)
+      VALUES (
+        'Test Autoeval Idea 1',
+        'Problem statement for the automated evaluation test requires at least 20 chars.',
+        'Solution statement for the automated evaluation test requires at least 20 chars.',
+        'A comprehensive resilient architecture description exceeding fifty characters for anti-gaming verification.',
+        'AI & Machine Learning',
+        $1,
+        'validated'
+      )
       RETURNING id
     `, [testUserId]);
     assert(idea1.length > 0, "Created qualifying idea 1");
@@ -121,10 +129,17 @@ async function run() {
 
 
     console.log("\n--- TEST 2: PROJECT CREATION & DELETION RE-EVALUATION ---");
-    // Create qualifying project
+    // Create qualifying substantive project with repo and specs
     const { rows: proj1 } = await client.query(`
-      INSERT INTO public.projects (name, description, owner_id, status)
-      VALUES ('Test Autoeval Project 1', 'Description', $1, 'in_development')
+      INSERT INTO public.projects (name, description, owner_id, status, repository_url, required_skills)
+      VALUES (
+        'Test Autoeval Project 1',
+        'A comprehensive production software system engineered with complete automated test coverage and specs.',
+        $1,
+        'in_development',
+        'https://github.com/ideaera/test-autoeval-proj',
+        ARRAY['TypeScript', 'PostgreSQL']
+      )
       RETURNING id
     `, [testUserId]);
 
@@ -145,11 +160,21 @@ async function run() {
 
     console.log("\n--- TEST 3: TEAM PLAYER MEMBERSHIP & REMOVAL ---");
     // Create dummy project under another user to test membership
+    const otherUser = await client.query("SELECT id FROM public.profiles WHERE id != $1 LIMIT 1", [testUserId]);
+    const otherUserId = otherUser.rows[0].id;
+
     const { rows: teamProj } = await client.query(`
-      INSERT INTO public.projects (name, description, owner_id, status)
-      VALUES ('Test Autoeval Team Project', 'Desc', 'd1aabec0-3b89-4c1d-a33d-a6573224f5c2', 'in_development')
+      INSERT INTO public.projects (name, description, owner_id, status, repository_url, required_skills)
+      VALUES (
+        'Test Autoeval Team Project',
+        'A multi-collaborator platform requiring active task execution and team contributions.',
+        $1,
+        'in_development',
+        'https://github.com/ideaera/team-collab',
+        ARRAY['React']
+      )
       RETURNING id
-    `);
+    `, [otherUserId]);
 
     // Add user as project member with enum 'Contributor'
     await client.query(`
@@ -157,11 +182,19 @@ async function run() {
       VALUES ($1, $2, 'Contributor')
     `, [teamProj[0].id, testUserId]);
 
+    // To be a meaningful team contributor, user must complete an assigned task on that project!
+    const { rows: taskRow } = await client.query(`
+      INSERT INTO public.tasks (project_id, title, description, assigned_to, status, completed_at)
+      VALUES ($1, 'Team Milestone Task', 'Assigned and completed task for team execution', $2, 'Completed', now())
+      RETURNING id;
+    `, [teamProj[0].id, testUserId]);
+
     const { rows: evalTeam } = await client.query("SELECT public.evaluate_and_sync_user_badges($1)", [testUserId]);
     const teamAwarded = (evalTeam[0].evaluate_and_sync_user_badges.newly_awarded || []).map(b => b.slug);
-    assert(teamAwarded.includes("team-player"), "Team Player badge awarded on joining project team");
+    assert(teamAwarded.includes("team-player"), "Team Player badge awarded on joining project team with completed task");
 
-    // Remove user from project member
+    // Remove task and membership
+    await client.query("DELETE FROM public.tasks WHERE id = $1", [taskRow[0].id]);
     await client.query("DELETE FROM public.project_members WHERE project_id = $1 AND user_id = $2", [teamProj[0].id, testUserId]);
     console.log("  -> Team membership removed. Re-evaluating badges...");
 
@@ -184,46 +217,89 @@ async function run() {
       ON CONFLICT DO NOTHING
     `, [testUserId, peer1, peer2]);
 
-    // Create 1 project
-    const { rows: goldProj } = await client.query(`
-      INSERT INTO public.projects (name, description, owner_id, status)
-      VALUES ('Test Autoeval Gold Project', 'Desc', $1, 'in_development')
+    // Create 2 software projects (1 in development, 1 completed)
+    const { rows: goldProj1 } = await client.query(`
+      INSERT INTO public.projects (name, description, owner_id, status, repository_url, required_skills)
+      VALUES (
+        'Test Autoeval Gold Project 1',
+        'Substantive project description exceeding 50 characters for gold tier qualification verification.',
+        $1,
+        'in_development',
+        'https://github.com/ideaera/gold-proj-1',
+        ARRAY['TypeScript']
+      )
       RETURNING id
     `, [testUserId]);
 
-    // Create 3 ideas
-    const { rows: goldIdeas } = await client.query(`
-      INSERT INTO public.ideas (title, problem, solution, description, category, creator_id)
+    const { rows: goldProj2 } = await client.query(`
+      INSERT INTO public.projects (name, description, owner_id, status, repository_url, required_skills)
+      VALUES (
+        'Test Autoeval Gold Project 2',
+        'Second substantive project description exceeding 50 characters, marked launched/completed.',
+        $1,
+        'Completed',
+        'https://github.com/ideaera/gold-proj-2',
+        ARRAY['TypeScript', 'Rust']
+      )
+      RETURNING id
+    `, [testUserId]);
+
+    // Create 3 completed tasks for user
+    const { rows: goldTasks } = await client.query(`
+      INSERT INTO public.tasks (project_id, title, description, assigned_to, status, completed_at)
       VALUES 
-        ('Test Autoeval Gold Idea 1', 'P1', 'S1', 'D1', 'AI & Machine Learning', $1),
-        ('Test Autoeval Gold Idea 2', 'P2', 'S2', 'D2', 'AI & Machine Learning', $1),
-        ('Test Autoeval Gold Idea 3', 'P3', 'S3', 'D3', 'AI & Machine Learning', $1)
+        ($1, 'Gold Task 1', 'Task 1 description', $2, 'Completed', now()),
+        ($1, 'Gold Task 2', 'Task 2 description', $2, 'Completed', now()),
+        ($1, 'Gold Task 3', 'Task 3 description', $2, 'Completed', now())
+      RETURNING id;
+    `, [goldProj1[0].id, testUserId]);
+
+    // Create hackathon registration
+    const { rows: goldHack } = await client.query(`
+      INSERT INTO public.hackathons (title, description, start_date, end_date, organizer_id, location, prize_pool)
+      VALUES ('Gold Sprint Hackathon', 'High intensity sprint for verified gold achievers', now(), now() + interval '3 days', $1, 'Virtual', '$5,000')
+      RETURNING id;
+    `, [otherUserId]);
+    await client.query(`
+      INSERT INTO public.hackathon_registrations (hackathon_id, user_id)
+      VALUES ($1, $2);
+    `, [goldHack[0].id, testUserId]);
+
+    // Create 5 substantive ideas
+    const { rows: goldIdeas } = await client.query(`
+      INSERT INTO public.ideas (title, problem, solution, description, category, creator_id, validation_status)
+      VALUES 
+        ('Gold Idea 1', 'Problem statement for gold idea 1 requiring at least 20 chars', 'Solution statement for gold idea 1 requiring at least 20 chars', 'Substantive description exceeding 50 chars for gold tier 1', 'AI & Machine Learning', $1, 'validated'),
+        ('Gold Idea 2', 'Problem statement for gold idea 2 requiring at least 20 chars', 'Solution statement for gold idea 2 requiring at least 20 chars', 'Substantive description exceeding 50 chars for gold tier 2', 'AI & Machine Learning', $1, 'validated'),
+        ('Gold Idea 3', 'Problem statement for gold idea 3 requiring at least 20 chars', 'Solution statement for gold idea 3 requiring at least 20 chars', 'Substantive description exceeding 50 chars for gold tier 3', 'AI & Machine Learning', $1, 'validated'),
+        ('Gold Idea 4', 'Problem statement for gold idea 4 requiring at least 20 chars', 'Solution statement for gold idea 4 requiring at least 20 chars', 'Substantive description exceeding 50 chars for gold tier 4', 'AI & Machine Learning', $1, 'validated'),
+        ('Gold Idea 5', 'Problem statement for gold idea 5 requiring at least 20 chars', 'Solution statement for gold idea 5 requiring at least 20 chars', 'Substantive description exceeding 50 chars for gold tier 5', 'AI & Machine Learning', $1, 'validated')
       RETURNING id
     `, [testUserId]);
-    assert(goldIdeas.length === 3, "Created 3 ideas for Gold tier eligibility");
+    assert(goldIdeas.length === 5, "Created 5 ideas for Gold tier eligibility");
 
-    // Evaluate: user meets 3 ideas, 1 project, 2 connections -> Top Performer (Gold), High Performer (Silver), Active Innovator (Bronze)
+    // Evaluate: user meets all gold requirements -> Top Performer (Gold), High Performer (Silver), Active Innovator (Bronze)
     const { rows: evalGold } = await client.query("SELECT public.evaluate_and_sync_user_badges($1)", [testUserId]);
     const goldAwarded = (evalGold[0].evaluate_and_sync_user_badges.newly_awarded || []).map(b => b.slug);
-    assert(goldAwarded.includes("top-performer"), "🏆 Top Performer (Gold) awarded with 3 ideas, 1 proj, 2 conns");
+    assert(goldAwarded.includes("top-performer"), "🏆 Top Performer (Gold) awarded with 5 ideas, 2 proj, 3 tasks, 1 hackathon");
     assert(goldAwarded.includes("high-performer"), "🥈 High Performer (Silver) awarded");
     assert(goldAwarded.includes("active-innovator"), "🥉 Active Innovator (Bronze) awarded");
 
-    // STEP A: Delete 1 idea (now has 2 ideas, 1 project, 2 connections)
-    console.log("  -> User deletes 1 idea (remaining: 2 ideas, 1 project). Re-evaluating...");
-    await client.query("DELETE FROM public.ideas WHERE id = $1", [goldIdeas[2].id]);
+    // STEP A: Delete completed project (now has 1 project, 0 completed projects)
+    console.log("  -> User deletes completed project. Re-evaluating...");
+    await client.query("DELETE FROM public.projects WHERE id = $1", [goldProj2[0].id]);
 
     const { rows: evalStepA } = await client.query("SELECT public.evaluate_and_sync_user_badges($1)", [testUserId]);
     const stepARevoked = (evalStepA[0].evaluate_and_sync_user_badges.revoked || []).map(b => b.slug);
     const stepACurrent = (evalStepA[0].evaluate_and_sync_user_badges.currently_valid || []).map(b => b.slug);
 
-    assert(stepARevoked.includes("top-performer"), "🏆 Top Performer is REVOKED because ideas dropped from 3 to 2");
-    assert(stepACurrent.includes("high-performer"), "🥈 User retains High Performer (still meets 2 ideas + 1 proj)");
+    assert(stepARevoked.includes("top-performer"), "🏆 Top Performer is REVOKED because completed projects dropped to 0");
+    assert(stepACurrent.includes("high-performer"), "🥈 User retains High Performer (still meets 2+ ideas, 1 proj, 1 task)");
     assert(stepACurrent.includes("active-innovator"), "🥉 User retains Active Innovator (still meets >= 1 idea/proj)");
 
-    // STEP B: Delete 1 more idea (now has 1 idea, 1 project)
-    console.log("  -> User deletes 1 more idea (remaining: 1 idea, 1 project). Re-evaluating...");
-    await client.query("DELETE FROM public.ideas WHERE id = $1", [goldIdeas[1].id]);
+    // STEP B: Delete 4 ideas (remaining: 1 idea, 1 project)
+    console.log("  -> User deletes 4 ideas (remaining: 1 idea, 1 project). Re-evaluating...");
+    await client.query("DELETE FROM public.ideas WHERE id IN ($1, $2, $3, $4)", [goldIdeas[1].id, goldIdeas[2].id, goldIdeas[3].id, goldIdeas[4].id]);
 
     const { rows: evalStepB } = await client.query("SELECT public.evaluate_and_sync_user_badges($1)", [testUserId]);
     const stepBRevoked = (evalStepB[0].evaluate_and_sync_user_badges.revoked || []).map(b => b.slug);
@@ -235,7 +311,10 @@ async function run() {
     // STEP C: Delete last idea and project (now has 0 ideas, 0 projects)
     console.log("  -> User deletes last idea and project (remaining: 0 ideas, 0 projects). Re-evaluating...");
     await client.query("DELETE FROM public.ideas WHERE id = $1", [goldIdeas[0].id]);
-    await client.query("DELETE FROM public.projects WHERE id = $1", [goldProj[0].id]);
+    await client.query("DELETE FROM public.tasks WHERE project_id = $1", [goldProj1[0].id]);
+    await client.query("DELETE FROM public.projects WHERE id = $1", [goldProj1[0].id]);
+    await client.query("DELETE FROM public.hackathon_registrations WHERE user_id = $1", [testUserId]);
+    await client.query("DELETE FROM public.hackathons WHERE id = $1", [goldHack[0].id]);
 
     const { rows: evalStepC } = await client.query("SELECT public.evaluate_and_sync_user_badges($1)", [testUserId]);
     const stepCRevoked = (evalStepC[0].evaluate_and_sync_user_badges.revoked || []).map(b => b.slug);

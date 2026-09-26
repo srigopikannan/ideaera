@@ -5,10 +5,12 @@ import {
   UserBadge,
   BadgeAuditLog,
   UserActivityMetrics,
+  TierProgression,
+  TierProgressionRequirement,
   BadgeEvaluationResult,
 } from "@/types";
 
-export type { UserActivityMetrics, BadgeEvaluationResult };
+export type { UserActivityMetrics, TierProgression, TierProgressionRequirement, BadgeEvaluationResult };
 
 export interface BadgeSummary {
   total_earned: number;
@@ -19,6 +21,7 @@ export interface BadgeSummary {
   prestige_score: number;
   completion_rate: number;
   metrics: UserActivityMetrics;
+  tier_progression: TierProgression;
 }
 
 export interface UserBadgesResult {
@@ -29,23 +32,39 @@ export interface UserBadgesResult {
 }
 
 /**
- * Calculates raw user metrics across verified database tables.
+ * Calculates raw user metrics across verified database tables with anti-gaming quality thresholds.
  */
 export async function calculateUserMetrics(userId: string): Promise<UserActivityMetrics> {
   const supabase = await createClient();
 
-  const [ideasRes, projectsRes, connsRes, hackathonRegsRes, hackathonsOrganizedRes, teamRes, tasksRes] =
+  // Prefer calling authoritative evaluate_and_sync_user_badges RPC
+  try {
+    const { data, error } = await supabase.rpc("evaluate_and_sync_user_badges", {
+      target_user_id: userId,
+    });
+    if (!error && data?.metrics) {
+      return data.metrics as UserActivityMetrics;
+    }
+  } catch (err) {
+    console.warn("RPC calculate metrics fallback:", err);
+  }
+
+  // Fallback with anti-gaming checks
+  const [ideasRes, projectsRes, compProjectsRes, connsRes, hackathonRegsRes, hackathonsOrganizedRes, teamRes, tasksRes] =
     await Promise.all([
       supabase
         .from("ideas")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", userId)
-        .not("title", "is", null),
+        .select("id, title, description, problem, solution, validation_status")
+        .eq("creator_id", userId),
+      supabase
+        .from("projects")
+        .select("id, name, description, repository_url, deployment_url, required_skills, status")
+        .eq("owner_id", userId),
       supabase
         .from("projects")
         .select("id", { count: "exact", head: true })
         .eq("owner_id", userId)
-        .not("name", "is", null),
+        .or("status.ilike.%complete%,status.eq.Done,status.eq.Launched"),
       supabase
         .from("connections")
         .select("id", { count: "exact", head: true })
@@ -61,24 +80,203 @@ export async function calculateUserMetrics(userId: string): Promise<UserActivity
         .eq("organizer_id", userId),
       supabase
         .from("project_members")
-        .select("project_id", { count: "exact", head: true })
+        .select("project_id")
         .eq("user_id", userId),
       supabase
         .from("tasks")
-        .select("id", { count: "exact", head: true })
+        .select("id, project_id", { count: "exact" })
         .eq("assigned_to", userId)
         .eq("status", "Completed"),
     ]);
 
+  const validIdeas = (ideasRes.data || []).filter((i: any) => {
+    if (!i.title || i.title.trim().length < 5) return false;
+    const descLen = (i.description || "").trim().length;
+    const probLen = (i.problem || "").trim().length;
+    const solLen = (i.solution || "").trim().length;
+    return (
+      descLen >= 50 ||
+      (probLen >= 20 && solLen >= 20) ||
+      ["testing", "validated"].includes(i.validation_status)
+    );
+  }).length;
+
+  const validProjects = (projectsRes.data || []).filter((p: any) => {
+    if (!p.name || p.name.trim().length < 3) return false;
+    if ((p.description || "").trim().length < 50) return false;
+    return (
+      Boolean(p.repository_url?.trim()) ||
+      Boolean(p.deployment_url?.trim()) ||
+      (Array.isArray(p.required_skills) && p.required_skills.length > 0)
+    );
+  }).length;
+
   const hackathonsCount = (hackathonRegsRes.count || 0) + (hackathonsOrganizedRes.count || 0);
 
+  // Meaningful team contributions: member who completed at least 1 task on that project
+  const completedTaskProjectIds = new Set((tasksRes.data || []).map((t: any) => t.project_id));
+  const validTeamCount = (teamRes.data || []).filter((pm: any) =>
+    completedTaskProjectIds.has(pm.project_id)
+  ).length;
+
   return {
-    ideas_count: ideasRes.count || 0,
-    projects_count: projectsRes.count || 0,
+    ideas_count: validIdeas,
+    projects_count: validProjects,
+    completed_projects_count: compProjectsRes.count || 0,
     connections_count: connsRes.count || 0,
     hackathons_count: hackathonsCount,
-    team_contributions_count: teamRes.count || 0,
+    team_contributions_count: validTeamCount,
     completed_tasks_count: tasksRes.count || 0,
+  };
+}
+
+/**
+ * Computes explicit tier progression toward next tier (Bronze -> Silver -> Gold).
+ */
+export function computeTierProgression(
+  earned: BadgeWithProgress[],
+  metrics: UserActivityMetrics
+): TierProgression {
+  const hasGoldBadge = earned.some((b) => b.tier === "gold");
+  const silverBadges = earned.filter((b) => b.tier === "silver");
+  const bronzeBadges = earned.filter((b) => b.tier === "bronze");
+
+  const ideas = metrics.ideas_count || 0;
+  const projects = metrics.projects_count || 0;
+  const compProjects = metrics.completed_projects_count || 0;
+  const tasks = metrics.completed_tasks_count || 0;
+  const hackathons = metrics.hackathons_count || 0;
+  const connections = metrics.connections_count || 0;
+
+  // Tier 3: Gold (Top Performer)
+  if (hasGoldBadge) {
+    return {
+      currentTier: "gold",
+      currentTierLabel: "Gold — Top Performer",
+      nextTier: null,
+      nextTierLabel: null,
+      progressPercentage: 100,
+      requirementsToNextTier: [
+        {
+          label: "Elite Tier Maintained across all innovation disciplines",
+          current: 1,
+          target: 1,
+          satisfied: true,
+        },
+      ],
+    };
+  }
+
+  // Tier 2: Silver (High Performer)
+  if (silverBadges.length >= 1) {
+    const goldReqs: TierProgressionRequirement[] = [
+      {
+        label: "5 Developed Ideas",
+        current: Math.min(5, ideas),
+        target: 5,
+        satisfied: ideas >= 5,
+      },
+      {
+        label: "2 Software Projects",
+        current: Math.min(2, projects),
+        target: 2,
+        satisfied: projects >= 2,
+      },
+      {
+        label: "1 Completed Project",
+        current: Math.min(1, compProjects),
+        target: 1,
+        satisfied: compProjects >= 1,
+      },
+      {
+        label: "3 Completed Project Tasks",
+        current: Math.min(3, tasks),
+        target: 3,
+        satisfied: tasks >= 3,
+      },
+      {
+        label: "1 Hackathon or 3 Connections",
+        current: Math.min(1, hackathons >= 1 || connections >= 3 ? 1 : 0),
+        target: 1,
+        satisfied: hackathons >= 1 || connections >= 3,
+      },
+    ];
+
+    const satisfiedCount = goldReqs.filter((r) => r.satisfied).length;
+    const progressPct = Math.round((satisfiedCount / goldReqs.length) * 100);
+
+    return {
+      currentTier: "silver",
+      currentTierLabel: "Silver — High Performer",
+      nextTier: "gold",
+      nextTierLabel: "Gold — Top Performer",
+      progressPercentage: progressPct,
+      requirementsToNextTier: goldReqs,
+    };
+  }
+
+  // Tier 1: Bronze (Active Innovator)
+  if (bronzeBadges.length >= 1) {
+    const silverReqs: TierProgressionRequirement[] = [
+      {
+        label: "2 Developed Ideas",
+        current: Math.min(2, ideas),
+        target: 2,
+        satisfied: ideas >= 2,
+      },
+      {
+        label: "1 Software Project",
+        current: Math.min(1, projects),
+        target: 1,
+        satisfied: projects >= 1,
+      },
+      {
+        label: "1 Completed Task / Team Work",
+        current: Math.min(1, tasks),
+        target: 1,
+        satisfied: tasks >= 1,
+      },
+    ];
+
+    const satisfiedCount = silverReqs.filter((r) => r.satisfied).length;
+    const progressPct = Math.round((satisfiedCount / silverReqs.length) * 100);
+
+    return {
+      currentTier: "bronze",
+      currentTierLabel: "Bronze — Active Innovator",
+      nextTier: "silver",
+      nextTierLabel: "Silver — High Performer",
+      progressPercentage: progressPct,
+      requirementsToNextTier: silverReqs,
+    };
+  }
+
+  // No Tier: Aspiring Innovator
+  const bronzeReqs: TierProgressionRequirement[] = [
+    {
+      label: "1 Developed Idea or Software Project",
+      current: Math.min(1, Math.max(ideas, projects)),
+      target: 1,
+      satisfied: ideas >= 1 || projects >= 1,
+    },
+    {
+      label: "1 Connection, Team Work, or Hackathon",
+      current: Math.min(1, Math.max(connections, tasks, hackathons)),
+      target: 1,
+      satisfied: connections >= 1 || tasks >= 1 || hackathons >= 1,
+    },
+  ];
+
+  const satisfiedCount = bronzeReqs.filter((r) => r.satisfied).length;
+  const progressPct = Math.round((satisfiedCount / bronzeReqs.length) * 100);
+
+  return {
+    currentTier: "none",
+    currentTierLabel: "Aspiring Innovator",
+    nextTier: "bronze",
+    nextTierLabel: "Bronze — Active Innovator",
+    progressPercentage: progressPct,
+    requirementsToNextTier: bronzeReqs,
   };
 }
 
@@ -92,14 +290,13 @@ export async function calculateUserMetrics(userId: string): Promise<UserActivity
 export async function evaluateUserBadges(userId: string): Promise<BadgeEvaluationResult> {
   try {
     const supabase = await createClient();
-    
+
     // Execute evaluate_and_sync_user_badges RPC in database
     let { data, error } = await supabase.rpc("evaluate_and_sync_user_badges", {
       target_user_id: userId,
     });
 
     if (error) {
-      // Fallback attempt to evaluate_and_award_user_badges
       const fb = await supabase.rpc("evaluate_and_award_user_badges", {
         target_user_id: userId,
       });
@@ -124,6 +321,7 @@ export async function evaluateUserBadges(userId: string): Promise<BadgeEvaluatio
       metrics: data?.metrics || {
         ideas_count: 0,
         projects_count: 0,
+        completed_projects_count: 0,
         connections_count: 0,
         hackathons_count: 0,
         team_contributions_count: 0,
@@ -214,19 +412,27 @@ export async function getUserBadgesWithProgress(
         currentValue = Math.max(metrics.ideas_count, metrics.projects_count);
         percentage = currentValue >= 1 ? 100 : 0;
       } else if (badge.slug === "high-performer") {
-        const ideasPart = Math.min(1, metrics.ideas_count / 2) * 50;
-        const projectsPart = Math.min(1, metrics.projects_count / 1) * 50;
-        currentValue = Math.min(2, metrics.ideas_count) + Math.min(1, metrics.projects_count);
-        percentage = Math.min(100, Math.round(ideasPart + projectsPart));
-      } else if (badge.slug === "top-performer") {
-        const ideasPart = Math.min(1, metrics.ideas_count / 3) * 40;
+        const ideasPart = Math.min(1, metrics.ideas_count / 2) * 40;
         const projectsPart = Math.min(1, metrics.projects_count / 1) * 30;
-        const connsPart = Math.min(1, metrics.connections_count / 2) * 30;
+        const tasksPart = Math.min(1, (metrics.completed_tasks_count || 0) / 1) * 30;
         currentValue =
-          Math.min(3, metrics.ideas_count) +
+          Math.min(2, metrics.ideas_count) +
           Math.min(1, metrics.projects_count) +
-          Math.min(2, metrics.connections_count);
-        percentage = Math.min(100, Math.round(ideasPart + projectsPart + connsPart));
+          Math.min(1, metrics.completed_tasks_count || 0);
+        percentage = Math.min(100, Math.round(ideasPart + projectsPart + tasksPart));
+      } else if (badge.slug === "top-performer") {
+        const ideasPart = Math.min(1, metrics.ideas_count / 5) * 25;
+        const projectsPart = Math.min(1, metrics.projects_count / 2) * 20;
+        const compProjPart = Math.min(1, (metrics.completed_projects_count || 0) / 1) * 20;
+        const tasksPart = Math.min(1, (metrics.completed_tasks_count || 0) / 3) * 20;
+        const engagePart = Math.min(1, Math.max(metrics.hackathons_count / 1, metrics.connections_count / 3)) * 15;
+        currentValue =
+          Math.min(5, metrics.ideas_count) +
+          Math.min(2, metrics.projects_count) +
+          Math.min(1, metrics.completed_projects_count || 0) +
+          Math.min(3, metrics.completed_tasks_count || 0) +
+          Math.min(1, metrics.hackathons_count >= 1 || metrics.connections_count >= 3 ? 1 : 0);
+        percentage = Math.min(100, Math.round(ideasPart + projectsPart + compProjPart + tasksPart + engagePart));
       } else {
         const totalActivity = metrics.ideas_count + metrics.projects_count + metrics.connections_count;
         currentValue = totalActivity;
@@ -268,6 +474,8 @@ export async function getUserBadgesWithProgress(
   const completionRate =
     allBadges.length > 0 ? Math.round((earned.length / allBadges.length) * 100) : 0;
 
+  const tierProgression = computeTierProgression(earned, metrics);
+
   return {
     earned,
     in_progress: inProgress,
@@ -281,6 +489,7 @@ export async function getUserBadgesWithProgress(
       prestige_score: prestigeScore,
       completion_rate: completionRate,
       metrics,
+      tier_progression: tierProgression,
     },
   };
 }

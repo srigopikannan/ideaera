@@ -1,22 +1,25 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const REAL_SUPABASE_URL = "https://jhmnemzgbcwcryzolzbz.supabase.co";
-const REAL_SUPABASE_ANON_KEY = "sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD";
-
 export async function createClient() {
   const cookieStore = await cookies();
 
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
-    REAL_SUPABASE_URL;
+    "";
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
-    REAL_SUPABASE_ANON_KEY;
+    "";
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Supabase server client initialized without SUPABASE_URL or SUPABASE_ANON_KEY.");
+    }
+  }
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

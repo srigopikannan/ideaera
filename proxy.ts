@@ -1,24 +1,27 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const REAL_SUPABASE_URL = "https://jhmnemzgbcwcryzolzbz.supabase.co";
-const REAL_SUPABASE_ANON_KEY = "sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD";
-
 export default async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
+  // Apply baseline defense-in-depth HTTP security headers
+  supabaseResponse.headers.set("X-Content-Type-Options", "nosniff");
+  supabaseResponse.headers.set("X-Frame-Options", "DENY");
+  supabaseResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  supabaseResponse.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
-    REAL_SUPABASE_URL;
+    "";
 
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
-    REAL_SUPABASE_ANON_KEY;
+    "";
 
   if (supabaseUrl && supabaseAnonKey) {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {

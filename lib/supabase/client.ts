@@ -1,18 +1,18 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { parse, serialize } from "cookie";
 
-const REAL_SUPABASE_URL = "https://jhmnemzgbcwcryzolzbz.supabase.co";
-const REAL_SUPABASE_ANON_KEY = "sb_publishable_8ddKnV869Oj7ZQ1LHJ7myQ_ifOmyhxD";
-
 export function createClient() {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    REAL_SUPABASE_URL;
-
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    REAL_SUPABASE_ANON_KEY;
+    "";
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Supabase client initialized without NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    }
+  }
 
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

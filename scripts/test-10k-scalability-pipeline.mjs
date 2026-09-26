@@ -12,7 +12,7 @@ if (!dbUrl && fs.existsSync(".env.local")) {
   if (m) dbUrl = m[1];
 }
 if (!dbUrl) {
-  dbUrl = "postgresql://postgres:GOPIKANNAN1122@db.jhmnemzgbcwcryzolzbz.supabase.co:5432/postgres";
+  throw new Error("DATABASE_URL environment variable is required. Please set it in .env or .env.local.");
 }
 
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });

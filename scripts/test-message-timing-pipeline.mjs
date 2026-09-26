@@ -3,7 +3,7 @@ const { Client } = pg;
 
 let connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  connectionString = "postgresql://postgres:GOPIKANNAN1122@db.jhmnemzgbcwcryzolzbz.supabase.co:5432/postgres";
+  connectionString = process.env.DATABASE_URL || "";
 }
 // Strip query parameters like sslmode=require so ssl: { rejectUnauthorized: false } works smoothly in pg
 connectionString = connectionString.split("?")[0];

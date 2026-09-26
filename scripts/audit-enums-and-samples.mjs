@@ -1,6 +1,6 @@
 import pg from "pg";
 
-let dbUrl = "postgresql://postgres:GOPIKANNAN1122@db.jhmnemzgbcwcryzolzbz.supabase.co:5432/postgres";
+let dbUrl = process.env.DATABASE_URL || "";
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
 
 async function audit() {

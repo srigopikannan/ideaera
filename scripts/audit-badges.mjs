@@ -1,7 +1,7 @@
 import pg from "pg";
 
 const client = new pg.Client({
-  connectionString: "postgresql://postgres:GOPIKANNAN1122@db.jhmnemzgbcwcryzolzbz.supabase.co:5432/postgres",
+  connectionString: process.env.DATABASE_URL || "",
   ssl: { rejectUnauthorized: false },
 });
 

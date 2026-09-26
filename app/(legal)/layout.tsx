@@ -86,7 +86,7 @@ export default function LegalLayout({
             <span>•</span>
             <Link href="/privacy-center" className="hover:text-white transition-colors">Privacy Center</Link>
           </div>
-          <p>© {new Date().getFullYear()} IDEA ERA. All platform intellectual property and rights reserved.</p>
+          <p className="text-neutral-400 text-xs font-mono">© 2026 Srigopikannan K — IdeaEra. All rights reserved.</p>
         </div>
       </footer>
     </div>

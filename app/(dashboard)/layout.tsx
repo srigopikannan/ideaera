@@ -3,6 +3,7 @@ import { hasAcceptedCurrentPolicies } from "@/services/legal";
 import { PolicyConsentModal } from "@/components/legal/PolicyConsentModal";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { AppFooter } from "@/components/shell/AppFooter";
 
 export default async function DashboardLayout({
   children,
@@ -31,8 +32,11 @@ export default async function DashboardLayout({
       {/* Main Workspace Area: Expansive Full Canvas */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden">
         <AppHeader />
-        <main className="flex-1 w-full min-h-[calc(100vh-4rem)] relative overflow-x-hidden">
-          {children}
+        <main className="flex-1 w-full min-h-[calc(100vh-4rem)] relative overflow-x-hidden flex flex-col justify-between">
+          <div className="flex-1">
+            {children}
+          </div>
+          <AppFooter />
         </main>
       </div>
     </div>

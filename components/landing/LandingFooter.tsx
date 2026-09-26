@@ -105,8 +105,8 @@ export function LandingFooter() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center text-xs text-neutral-500 font-mono gap-4">
-          <p>© {new Date().getFullYear()} IDEA ERA. All rights reserved.</p>
+        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center text-xs text-neutral-400 font-mono gap-4">
+          <p>© 2026 Srigopikannan K — IdeaEra. All rights reserved.</p>
           <div className="flex gap-5 text-neutral-400">
             <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-white transition-colors" aria-label="GitHub">
               <Github className="h-4 w-4" />

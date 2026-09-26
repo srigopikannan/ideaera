@@ -255,6 +255,103 @@ export interface ProfileFilterOptions {
   stateFilter?: string;
   availabilityFilter?: string;
   interestFilter?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedProfilesResult {
+  profiles: Profile[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/**
+ * High-performance database-side paginated candidate search for 10,000+ users.
+ * Filters skills, colleges, locations, and availability via indexed PostgreSQL RPC.
+ */
+export async function searchProfilesPaginated(
+  options: ProfileFilterOptions = {}
+): Promise<PaginatedProfilesResult> {
+  const page = Math.max(1, options.page || 1);
+  const limit = Math.min(60, Math.max(1, options.limit || 24));
+  const offset = (page - 1) * limit;
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const currentUserId = user?.id;
+
+    const { data, error } = await supabase.rpc("search_profiles_10k", {
+      p_query: options.query?.trim() || null,
+      p_skill: options.skillFilter && options.skillFilter !== "All" ? options.skillFilter.trim() : null,
+      p_college: options.collegeFilter && options.collegeFilter !== "All" ? options.collegeFilter.trim() : null,
+      p_city: options.cityFilter && options.cityFilter !== "All" ? options.cityFilter.trim() : null,
+      p_state: options.stateFilter && options.stateFilter !== "All" ? options.stateFilter.trim() : null,
+      p_availability: options.availabilityFilter && options.availabilityFilter !== "All" ? options.availabilityFilter.trim() : null,
+      p_limit: limit,
+      p_offset: offset,
+      p_exclude_user_id: currentUserId || null,
+    });
+
+    if (error || !Array.isArray(data)) {
+      console.error("Error in search_profiles_10k RPC:", error);
+      return { profiles: [], total: 0, page, limit, hasMore: false };
+    }
+
+    const total = data.length > 0 ? Number(data[0].total_count || 0) : 0;
+    const profileIds = data.map((d: any) => d.id);
+
+    // Batch fetch connection statuses ONLY for the returned candidates
+    const statusMap: Record<string, "none" | "pending_sent" | "pending_received" | "connected"> = {};
+    if (currentUserId && profileIds.length > 0) {
+      try {
+        const { data: conns } = await supabase
+          .from("connections")
+          .select("requester_id, receiver_id, status")
+          .or(
+            `and(requester_id.eq.${currentUserId},receiver_id.in.(${profileIds.join(",")})),and(receiver_id.eq.${currentUserId},requester_id.in.(${profileIds.join(",")}))`
+          );
+
+        if (conns) {
+          for (const c of conns) {
+            const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
+            if (c.status === "accepted") {
+              statusMap[otherId] = "connected";
+            } else if (c.status === "pending") {
+              statusMap[otherId] = c.requester_id === currentUserId ? "pending_sent" : "pending_received";
+            }
+          }
+        }
+      } catch (connErr) {
+        console.error("Error fetching connections in searchProfilesPaginated:", connErr);
+      }
+    }
+
+    const profiles: Profile[] = data
+      .filter((d: any) => !isDeletedProfile(d))
+      .map((d: any) => {
+        const p = formatProfile(d, currentUserId);
+        return {
+          ...p,
+          connection_status: statusMap[p.id] || "none",
+        };
+      });
+
+    return {
+      profiles,
+      total,
+      page,
+      limit,
+      hasMore: offset + profiles.length < total,
+    };
+  } catch (err) {
+    console.error("Error in searchProfilesPaginated:", err);
+    return { profiles: [], total: 0, page, limit, hasMore: false };
+  }
 }
 
 export async function getAllProfiles(
@@ -262,125 +359,17 @@ export async function getAllProfiles(
   legacySkillFilter?: string
 ): Promise<Profile[]> {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const currentUserId = user?.id;
-
     const options: ProfileFilterOptions =
       typeof optionsOrQuery === "string"
-        ? { query: optionsOrQuery, skillFilter: legacySkillFilter }
-        : optionsOrQuery || {};
+        ? { query: optionsOrQuery, skillFilter: legacySkillFilter, limit: 48 }
+        : { ...(optionsOrQuery || {}), limit: optionsOrQuery?.limit || 48 };
 
-    let queryBuilder = supabase
-      .from("profiles")
-      .select("*, college_rel:colleges!college_id(id, name, city, district, state), user_skills(*, skill:skills(*))");
-
-    if (options.query) {
-      queryBuilder = queryBuilder.or(
-        `full_name.ilike.%${options.query}%,username.ilike.%${options.query}%,headline.ilike.%${options.query}%,bio.ilike.%${options.query}%,location.ilike.%${options.query}%`
-      );
-    }
-
-    const { data, error } = await queryBuilder.order("created_at", { ascending: false }).limit(60);
-    if (data && !error) {
-      let results = data
-        .filter((d) => !isDeletedProfile(d))
-        .map((d) => formatProfile(d, currentUserId));
-
-      // Exclude current user from candidate directories
-      if (currentUserId) {
-        results = results.filter((p) => p.id !== currentUserId);
-      }
-
-      // Filter by skill
-      if (options.skillFilter && options.skillFilter !== "All") {
-        const target = options.skillFilter.toLowerCase();
-        results = results.filter((p) =>
-          p.skills?.some((s: string) => s.toLowerCase().includes(target))
-        );
-      }
-
-      // Filter by college
-      if (options.collegeFilter && options.collegeFilter !== "All") {
-        const targetCollege = options.collegeFilter.toLowerCase();
-        results = results.filter((p) =>
-          (p.college && p.college.toLowerCase().includes(targetCollege)) ||
-          (p.headline && p.headline.toLowerCase().includes(targetCollege))
-        );
-      }
-
-      // Filter by city
-      if (options.cityFilter && options.cityFilter !== "All") {
-        const targetCity = options.cityFilter.toLowerCase();
-        results = results.filter((p) =>
-          (p.city && p.city.toLowerCase().includes(targetCity)) ||
-          (p.location && p.location.toLowerCase().includes(targetCity))
-        );
-      }
-
-      // Filter by state
-      if (options.stateFilter && options.stateFilter !== "All") {
-        const targetState = options.stateFilter.toLowerCase();
-        results = results.filter((p) =>
-          (p.state && p.state.toLowerCase().includes(targetState)) ||
-          (p.location && p.location.toLowerCase().includes(targetState))
-        );
-      }
-
-      // Filter by availability
-      if (options.availabilityFilter && options.availabilityFilter !== "All") {
-        const targetAvail = options.availabilityFilter.toLowerCase();
-        results = results.filter((p) =>
-          p.availability && p.availability.toLowerCase().includes(targetAvail)
-        );
-      }
-
-      // Filter by interest
-      if (options.interestFilter && options.interestFilter !== "All") {
-        const targetInterest = options.interestFilter.toLowerCase();
-        results = results.filter((p) =>
-          p.interests?.some((i: string) => i.toLowerCase().includes(targetInterest))
-        );
-      }
-
-      // Fetch connection statuses for current user
-      const statusMap: Record<string, "none" | "pending_sent" | "pending_received" | "connected"> = {};
-      if (currentUserId) {
-        try {
-          const { data: userConns } = await supabase
-            .from("connections")
-            .select("requester_id, receiver_id, status")
-            .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
-
-          if (userConns) {
-            for (const c of userConns) {
-              const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
-              if (c.status === "accepted") {
-                statusMap[otherId] = "connected";
-              } else if (c.status === "pending") {
-                if (c.requester_id === currentUserId) {
-                  statusMap[otherId] = "pending_sent";
-                } else {
-                  statusMap[otherId] = "pending_received";
-                }
-              }
-            }
-          }
-        } catch (connErr) {
-          console.error("Error fetching connections in getAllProfiles:", connErr);
-        }
-      }
-
-      return results.map((p) => ({
-        ...p,
-        connection_status: statusMap[p.id] || "none",
-      }));
-    }
+    const result = await searchProfilesPaginated(options);
+    return result.profiles;
   } catch (err) {
     console.error("Error in getAllProfiles:", err);
+    return [];
   }
-
-  return [];
 }
 
 export async function getRecommendedPeople(

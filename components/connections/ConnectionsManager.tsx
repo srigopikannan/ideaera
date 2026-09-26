@@ -60,6 +60,19 @@ export function ConnectionsManager({
           event: "*",
           schema: "public",
           table: "connections",
+          filter: `receiver_id=eq.${currentUserId}`,
+        },
+        () => {
+          router.refresh();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `requester_id=eq.${currentUserId}`,
         },
         () => {
           router.refresh();

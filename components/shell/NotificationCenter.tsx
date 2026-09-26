@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Notification, NotificationType } from "@/types";
 import {
   getNotificationsAction,
+  getUnreadNotificationCountAction,
   markNotificationReadAction,
   markAllNotificationsReadAction,
   updateConnectionAction,
@@ -40,11 +41,22 @@ export function NotificationCenter() {
   const router = useRouter();
   const [isOpen, setIsOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState<number>(0);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const [processingId, setProcessingId] = React.useState<string | null>(null);
 
+  const fetchUnreadCount = React.useCallback(() => {
+    getUnreadNotificationCountAction()
+      .then((count) => {
+        if (typeof count === "number") setUnreadCount(count);
+      })
+      .catch((err) => {
+        console.error("Error fetching unread notification count:", err);
+      });
+  }, []);
+
   const fetchNotifications = React.useCallback(() => {
-    getNotificationsAction()
+    getNotificationsAction(20, 0)
       .then((data) => {
         if (Array.isArray(data)) {
           setNotifications(data);
@@ -55,9 +67,9 @@ export function NotificationCenter() {
       });
   }, []);
 
-  // Fetch on mount and subscribe to realtime
+  // Fast count on mount and subscribe to realtime
   React.useEffect(() => {
-    fetchNotifications();
+    fetchUnreadCount();
 
     const supabase = createClient();
     let channel: any = null;
@@ -77,7 +89,8 @@ export function NotificationCenter() {
             filter: `recipient_id=eq.${user.id}`,
           },
           () => {
-            fetchNotifications();
+            fetchUnreadCount();
+            if (isOpen) fetchNotifications();
           }
         )
         .on(
@@ -89,7 +102,8 @@ export function NotificationCenter() {
             filter: `recipient_id=eq.${user.id}`,
           },
           () => {
-            fetchNotifications();
+            fetchUnreadCount();
+            if (isOpen) fetchNotifications();
           }
         )
         .subscribe();
@@ -100,21 +114,21 @@ export function NotificationCenter() {
         supabase.removeChannel(channel);
       }
     };
-  }, [fetchNotifications]);
+  }, [fetchUnreadCount, fetchNotifications, isOpen]);
 
-  // Also refetch when dropdown opens
+  // Fetch only when dropdown opens
   React.useEffect(() => {
     if (isOpen) {
       fetchNotifications();
+      fetchUnreadCount();
     }
-  }, [isOpen, fetchNotifications]);
-
-  const unreadCount = notifications.filter((n) => !n.read && !n.is_read).length;
+  }, [isOpen, fetchNotifications, fetchUnreadCount]);
 
   const handleMarkAsRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true, is_read: true } : n))
     );
+    setUnreadCount((c) => Math.max(0, c - 1));
     await markNotificationReadAction(id);
   };
 
@@ -245,6 +259,7 @@ export function NotificationCenter() {
 
   const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true, is_read: true })));
+    setUnreadCount(0);
     await markAllNotificationsReadAction();
   };
 

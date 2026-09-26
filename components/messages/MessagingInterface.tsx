@@ -140,6 +140,95 @@ export function MessagingInterface({
       console.error("Failed to acknowledge pending message delivery:", err)
     );
 
+    const handleMessageChange = (payload: any) => {
+      const newMsg = payload.new as Message;
+      if (!newMsg || !newMsg.id) return;
+
+      if (payload.eventType === "INSERT") {
+        const isReceiver = newMsg.receiver_id === currentUserId;
+        const isSender = newMsg.sender_id === currentUserId;
+        const currentSelected = selectedUserIdRef.current;
+
+        if (isReceiver) {
+          // Automatically acknowledge delivery
+          markMessagesDeliveredAction([newMsg.id]).catch(console.error);
+
+          if (currentSelected === newMsg.sender_id) {
+            // Thread is currently open, immediately mark as read
+            markConversationReadAction(newMsg.sender_id).catch(console.error);
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
+        } else if (isSender && currentSelected === newMsg.receiver_id) {
+          // Message sent by me (confirmed or multi-tab echo)
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) {
+              return prev.map((m) => (m.id === newMsg.id ? newMsg : m));
+            }
+            const tempIndex = prev.findIndex(
+              (m) => m.id.startsWith("temp_") && m.content === newMsg.content
+            );
+            if (tempIndex !== -1) {
+              const next = [...prev];
+              next[tempIndex] = newMsg;
+              return next;
+            }
+            return [...prev, newMsg];
+          });
+        }
+
+        // Update conversation list last message and unread count
+        const partnerId = isSender ? newMsg.receiver_id : newMsg.sender_id;
+        setConversationList((prev) => {
+          const exists = prev.some((c) => c.other_user.id === partnerId);
+          const isCurrentThread = currentSelected === partnerId;
+          const shouldIncrement = isReceiver && !isCurrentThread;
+
+          if (exists) {
+            return prev.map((c) => {
+              if (c.other_user.id === partnerId) {
+                return {
+                  ...c,
+                  last_message: newMsg,
+                  unread_count: shouldIncrement ? c.unread_count + 1 : c.unread_count,
+                };
+              }
+              return c;
+            });
+          } else {
+            const partnerProfile = people.find((p) => p.id === partnerId);
+            if (partnerProfile) {
+              return [
+                {
+                  other_user: partnerProfile,
+                  last_message: newMsg,
+                  unread_count: shouldIncrement ? 1 : 0,
+                },
+                ...prev,
+              ];
+            }
+          }
+          return prev;
+        });
+      } else if (payload.eventType === "UPDATE") {
+        // Live update of message delivery / seen status
+        setMessages((prev) =>
+          prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
+        );
+
+        // Update conversation list last message if it matches
+        setConversationList((prev) =>
+          prev.map((c) =>
+            c.last_message?.id === newMsg.id
+              ? { ...c, last_message: { ...c.last_message, ...newMsg } }
+              : c
+          )
+        );
+      }
+    };
+
     const channel = supabase
       .channel(`messages_realtime_${currentUserId}`)
       .on(
@@ -148,95 +237,19 @@ export function MessagingInterface({
           event: "*",
           schema: "public",
           table: "messages",
+          filter: `receiver_id=eq.${currentUserId}`,
         },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          if (!newMsg || !newMsg.id) return;
-
-          if (payload.eventType === "INSERT") {
-            const isReceiver = newMsg.receiver_id === currentUserId;
-            const isSender = newMsg.sender_id === currentUserId;
-            const currentSelected = selectedUserIdRef.current;
-
-            if (isReceiver) {
-              // Automatically acknowledge delivery
-              markMessagesDeliveredAction([newMsg.id]).catch(console.error);
-
-              if (currentSelected === newMsg.sender_id) {
-                // Thread is currently open, immediately mark as read
-                markConversationReadAction(newMsg.sender_id).catch(console.error);
-                setMessages((prev) => {
-                  if (prev.some((m) => m.id === newMsg.id)) return prev;
-                  return [...prev, newMsg];
-                });
-              }
-            } else if (isSender && currentSelected === newMsg.receiver_id) {
-              // Message sent by me (confirmed or multi-tab echo)
-              setMessages((prev) => {
-                if (prev.some((m) => m.id === newMsg.id)) {
-                  return prev.map((m) => (m.id === newMsg.id ? newMsg : m));
-                }
-                const tempIndex = prev.findIndex(
-                  (m) => m.id.startsWith("temp_") && m.content === newMsg.content
-                );
-                if (tempIndex !== -1) {
-                  const next = [...prev];
-                  next[tempIndex] = newMsg;
-                  return next;
-                }
-                return [...prev, newMsg];
-              });
-            }
-
-            // Update conversation list last message and unread count
-            const partnerId = isSender ? newMsg.receiver_id : newMsg.sender_id;
-            setConversationList((prev) => {
-              const exists = prev.some((c) => c.other_user.id === partnerId);
-              const isCurrentThread = currentSelected === partnerId;
-              const shouldIncrement = isReceiver && !isCurrentThread;
-
-              if (exists) {
-                return prev.map((c) => {
-                  if (c.other_user.id === partnerId) {
-                    return {
-                      ...c,
-                      last_message: newMsg,
-                      unread_count: shouldIncrement ? c.unread_count + 1 : c.unread_count,
-                    };
-                  }
-                  return c;
-                });
-              } else {
-                const partnerProfile = people.find((p) => p.id === partnerId);
-                if (partnerProfile) {
-                  return [
-                    {
-                      other_user: partnerProfile,
-                      last_message: newMsg,
-                      unread_count: shouldIncrement ? 1 : 0,
-                    },
-                    ...prev,
-                  ];
-                }
-              }
-              return prev;
-            });
-          } else if (payload.eventType === "UPDATE") {
-            // Live update of message delivery / seen status
-            setMessages((prev) =>
-              prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
-            );
-
-            // Update conversation list last message if it matches
-            setConversationList((prev) =>
-              prev.map((c) =>
-                c.last_message?.id === newMsg.id
-                  ? { ...c, last_message: { ...c.last_message, ...newMsg } }
-                  : c
-              )
-            );
-          }
-        }
+        handleMessageChange
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `sender_id=eq.${currentUserId}`,
+        },
+        handleMessageChange
       )
       .subscribe();
 

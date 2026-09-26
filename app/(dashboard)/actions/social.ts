@@ -5,6 +5,7 @@ import {
   updateConnectionStatus,
   removeConnection,
   getNotifications,
+  getUnreadNotificationCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   createIdeaSuggestionNotification,
@@ -18,8 +19,12 @@ import {
 } from "@/services/messaging";
 import { revalidatePath } from "next/cache";
 
-export async function getNotificationsAction() {
-  return await getNotifications();
+export async function getUnreadNotificationCountAction() {
+  return await getUnreadNotificationCount();
+}
+
+export async function getNotificationsAction(limit: number = 30, offset: number = 0) {
+  return await getNotifications(limit, offset);
 }
 
 export async function requestConnectionAction(targetUserId: string, connectionType: "public" | "private" = "private") {

@@ -4,6 +4,8 @@ import { getAllProfiles } from "@/services/profile";
 import { getIdeas } from "@/services/ideas";
 import { getProjects } from "@/services/projects";
 import { getHackathons } from "@/services/hackathons";
+import { rateLimiters } from "@/lib/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 export interface GlobalSearchResult {
   people: {
@@ -35,10 +37,26 @@ export async function searchGlobalAction(query: string): Promise<GlobalSearchRes
     };
   }
 
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const identifier = user?.id || "anon_search";
+    const rl = rateLimiters.search.check(identifier);
+    if (!rl.allowed) {
+      return { people: [], ideas: [], projects: [], hackathons: [] };
+    }
+  } catch {
+    // If auth client fails, continue with caution
+  }
+
+  const cleanQuery = query.trim();
+
   const [people, ideas, projects, hackathons] = await Promise.all([
-    getAllProfiles(query),
-    getIdeas(undefined, "popular", query),
-    getProjects(undefined, query),
+    getAllProfiles({ query: cleanQuery, limit: 5 }),
+    getIdeas(undefined, "popular", cleanQuery, 1, 4),
+    getProjects(undefined, cleanQuery),
     getHackathons("all"),
   ]);
 

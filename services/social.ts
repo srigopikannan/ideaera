@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles, getCurrentUserProfile } from "@/services/profile";
 import { Connection, Notification, NotificationType, MatchRecommendation, Profile } from "@/types";
 import { evaluateUserBadges } from "@/services/badges";
+import { rateLimiters } from "@/lib/rate-limit";
 
 export async function getConnections(): Promise<{
   all: Connection[];
@@ -77,6 +78,12 @@ export async function sendConnectionRequest(
 
   if (targetUserId === user.id) {
     throw new Error("You cannot send a connection request to yourself.");
+  }
+
+  // Rate Limiting Protection (15 requests / min)
+  const rateCheck = rateLimiters.connections.check(user.id);
+  if (!rateCheck.success) {
+    throw new Error("You have sent too many connection requests recently. Please wait a moment.");
   }
 
   // Validate Target User exists
@@ -460,12 +467,53 @@ function formatNotificationTitle(type: string): string {
   }
 }
 
-export async function getNotifications(): Promise<Notification[]> {
+export async function getUnreadNotificationCount(userId?: string): Promise<number> {
+  try {
+    const supabase = await createClient();
+    let targetUserId = userId;
+    if (!targetUserId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      targetUserId = user?.id;
+    }
+    if (!targetUserId) return 0;
+
+    const { data, error } = await supabase.rpc("get_unread_notification_count", {
+      p_user_id: targetUserId,
+    });
+
+    if (!error && data !== null && data !== undefined) {
+      return Number(data);
+    }
+
+    // Fallback count query with exact head count
+    const { count, error: countErr } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .or(`recipient_id.eq.${targetUserId},user_id.eq.${targetUserId}`)
+      .or("read.is.null,read.eq.false")
+      .or("is_read.is.null,is_read.eq.false");
+
+    return countErr ? 0 : count || 0;
+  } catch (err) {
+    console.error("Error in getUnreadNotificationCount:", err);
+    return 0;
+  }
+}
+
+export async function getNotifications(
+  limit: number = 30,
+  offset: number = 0
+): Promise<Notification[]> {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
+      const safeLimit = Math.min(100, Math.max(1, limit));
+      const safeOffset = Math.max(0, offset);
+
       const { data, error } = await supabase
         .from("notifications")
         .select(`
@@ -474,7 +522,8 @@ export async function getNotifications(): Promise<Notification[]> {
           connection:connections!connection_id(id, status, requester_id, receiver_id)
         `)
         .or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(safeOffset, safeOffset + safeLimit - 1);
 
       if (error) {
         console.error("[NOTIFICATION QUERY ERROR]", error);

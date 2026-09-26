@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Profile } from "@/types";
 import { requestConnectionAction } from "@/app/(dashboard)/actions/social";
+import { searchProfilesAction } from "@/app/(dashboard)/actions/profile";
 import {
   Search,
   MapPin,
@@ -20,6 +21,9 @@ import {
   X,
   Building,
   Trophy,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -58,6 +62,104 @@ export function TeammateDiscovery({
   const [hackathonFilter, setHackathonFilter] = React.useState(initialHackathon || "");
   const [availabilityFilter, setAvailabilityFilter] = React.useState<string>("All");
 
+  // Server-side paginated state
+  const [serverPeople, setServerPeople] = React.useState<Profile[]>(people);
+  const [totalCount, setTotalCount] = React.useState<number>(people.length);
+  const [page, setPage] = React.useState<number>(1);
+  const pageSize = 24;
+  const [isLoading, setIsLoading] = React.useState<boolean>(false);
+
+  // Sync initial people when props update
+  React.useEffect(() => {
+    if (discoveryMode === "nearby" && nearbyFilter === "all") {
+      setServerPeople(people);
+      setTotalCount(people.length);
+    }
+  }, [people, discoveryMode, nearbyFilter]);
+
+  // Reset page to 1 whenever any filter changes
+  React.useEffect(() => {
+    setPage(1);
+  }, [
+    discoveryMode,
+    nearbyFilter,
+    searchQuery,
+    selectedSkills,
+    collegeFilter,
+    cityFilter,
+    stateFilter,
+    availabilityFilter,
+  ]);
+
+  // Debounced server search effect for 10K scalability
+  React.useEffect(() => {
+    // If nearby mode with "all", use local proximity list
+    if (discoveryMode === "nearby" && nearbyFilter === "all") {
+      setServerPeople(people);
+      setTotalCount(people.length);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        let city: string | undefined = undefined;
+        let state: string | undefined = undefined;
+        let college: string | undefined = undefined;
+        let query: string | undefined = undefined;
+        let skill: string | undefined = undefined;
+        let avail: string | undefined = undefined;
+
+        if (discoveryMode === "nearby") {
+          if (nearbyFilter === "city") city = currentUser?.city || undefined;
+          else if (nearbyFilter === "state") state = currentUser?.state || undefined;
+          else if (nearbyFilter === "college") college = currentUser?.college || undefined;
+        } else {
+          query = searchQuery.trim() || undefined;
+          skill = selectedSkills.length > 0 ? selectedSkills[0] : undefined;
+          college = collegeFilter.trim() || undefined;
+          city = cityFilter.trim() || undefined;
+          state = stateFilter.trim() || undefined;
+          avail = availabilityFilter !== "All" ? availabilityFilter : undefined;
+        }
+
+        const res = await searchProfilesAction({
+          query,
+          skillFilter: skill,
+          collegeFilter: college,
+          cityFilter: city,
+          stateFilter: state,
+          availabilityFilter: avail,
+          page,
+          limit: pageSize,
+        });
+
+        setServerPeople(res.profiles);
+        setTotalCount(res.total);
+      } catch (err) {
+        console.error("Error searching profiles:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [
+    discoveryMode,
+    nearbyFilter,
+    searchQuery,
+    selectedSkills,
+    collegeFilter,
+    cityFilter,
+    stateFilter,
+    availabilityFilter,
+    page,
+    pageSize,
+    currentUser,
+    people,
+  ]);
+
   // Connection states map: userId -> status
   const [connectionStates, setConnectionStates] = React.useState<Record<string, string>>({});
   const [connectingId, setConnectingId] = React.useState<string | null>(null);
@@ -93,99 +195,37 @@ export function TeammateDiscovery({
   // Filter and rank people
   const filteredPeople = React.useMemo(() => {
     // Exclude current user from teammates list
-    let list = people.filter((p) => p.id !== currentUser?.id);
+    let list = serverPeople.filter((p) => p.id !== currentUser?.id);
 
-    if (discoveryMode === "nearby") {
+    if (discoveryMode === "nearby" && nearbyFilter === "all") {
       const userCity = currentUser?.city?.toLowerCase().trim();
       const userState = currentUser?.state?.toLowerCase().trim();
       const userCollege = currentUser?.college?.toLowerCase().trim();
 
-      if (nearbyFilter === "city" && userCity) {
-        list = list.filter((p) => p.city?.toLowerCase().trim() === userCity);
-      } else if (nearbyFilter === "state" && userState) {
-        list = list.filter((p) => p.state?.toLowerCase().trim() === userState);
-      } else if (nearbyFilter === "college" && userCollege) {
-        list = list.filter((p) => p.college?.toLowerCase().trim() === userCollege);
-      } else {
-        // Proximity sort
-        list = [...list].sort((a, b) => {
-          const aCityMatch = userCity && a.city?.toLowerCase().trim() === userCity ? 4 : 0;
-          const bCityMatch = userCity && b.city?.toLowerCase().trim() === userCity ? 4 : 0;
-
-          const aCollegeMatch = userCollege && a.college?.toLowerCase().trim() === userCollege ? 3 : 0;
-          const bCollegeMatch = userCollege && b.college?.toLowerCase().trim() === userCollege ? 3 : 0;
-
-          const aStateMatch = userState && a.state?.toLowerCase().trim() === userState ? 2 : 0;
-          const bStateMatch = userState && b.state?.toLowerCase().trim() === userState ? 2 : 0;
-
-          const scoreA = aCityMatch + aCollegeMatch + aStateMatch;
-          const scoreB = bCityMatch + bCollegeMatch + bStateMatch;
-
-          return scoreB - scoreA;
-        });
-      }
-    } else {
-      // Custom Search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        list = list.filter(
-          (p) =>
-            p.full_name?.toLowerCase().includes(q) ||
-            p.username?.toLowerCase().includes(q) ||
-            p.headline?.toLowerCase().includes(q) ||
-            p.bio?.toLowerCase().includes(q)
-        );
-      }
-
-      if (selectedSkills.length > 0) {
-        list = list.filter((p) =>
-          selectedSkills.some((reqSkill) =>
-            p.skills?.some((s) => s.toLowerCase().includes(reqSkill.toLowerCase()))
-          )
-        );
-      }
-
-      if (collegeFilter.trim()) {
-        const c = collegeFilter.toLowerCase().trim();
-        list = list.filter((p) => p.college?.toLowerCase().includes(c));
-      }
-
-      if (cityFilter.trim()) {
-        const ct = cityFilter.toLowerCase().trim();
-        list = list.filter((p) => p.city?.toLowerCase().includes(ct) || p.location?.toLowerCase().includes(ct));
-      }
-
-      if (stateFilter.trim()) {
-        const st = stateFilter.toLowerCase().trim();
-        list = list.filter((p) => p.state?.toLowerCase().includes(st) || p.location?.toLowerCase().includes(st));
-      }
-
-      if (availabilityFilter !== "All") {
-        list = list.filter(
-          (p) => p.availability?.toLowerCase() === availabilityFilter.toLowerCase()
-        );
-      }
-
-      // Prioritize available innovators
+      // Proximity sort for nearby 'all'
       list = [...list].sort((a, b) => {
-        const aAvail = a.availability && a.availability !== "Not currently available" ? 1 : 0;
-        const bAvail = b.availability && b.availability !== "Not currently available" ? 1 : 0;
-        return bAvail - aAvail;
+        const aCityMatch = userCity && a.city?.toLowerCase().trim() === userCity ? 4 : 0;
+        const bCityMatch = userCity && b.city?.toLowerCase().trim() === userCity ? 4 : 0;
+
+        const aCollegeMatch = userCollege && a.college?.toLowerCase().trim() === userCollege ? 3 : 0;
+        const bCollegeMatch = userCollege && b.college?.toLowerCase().trim() === userCollege ? 3 : 0;
+
+        const aStateMatch = userState && a.state?.toLowerCase().trim() === userState ? 2 : 0;
+        const bStateMatch = userState && b.state?.toLowerCase().trim() === userState ? 2 : 0;
+
+        const scoreA = aCityMatch + aCollegeMatch + aStateMatch;
+        const scoreB = bCityMatch + bCollegeMatch + bStateMatch;
+
+        return scoreB - scoreA;
       });
     }
 
     return list;
   }, [
-    people,
+    serverPeople,
     currentUser,
     discoveryMode,
     nearbyFilter,
-    searchQuery,
-    selectedSkills,
-    collegeFilter,
-    cityFilter,
-    stateFilter,
-    availabilityFilter,
   ]);
 
   return (
@@ -225,8 +265,11 @@ export function TeammateDiscovery({
           </button>
         </div>
 
-        <div className="text-xs font-mono text-neutral-400 px-3">
-          <span>Found {filteredPeople.length} potential teammates</span>
+        <div className="text-xs font-mono text-neutral-400 px-3 flex items-center gap-2">
+          {isLoading && (
+            <Loader2 className="h-3 w-3 text-indigo-400 animate-spin shrink-0" />
+          )}
+          <span>Found {totalCount} potential teammates</span>
         </div>
       </div>
 
@@ -577,6 +620,39 @@ export function TeammateDiscovery({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Server Pagination Bar */}
+      {totalCount > pageSize && (
+        <div className="flex items-center justify-between p-3 sm:p-4 rounded-2xl border border-white/10 bg-[#0a0c13] mt-6">
+          <button
+            onClick={() => {
+              setPage((p) => Math.max(1, p - 1));
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            disabled={page <= 1 || isLoading}
+            className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-mono border border-white/10 bg-white/[0.03] text-neutral-300 hover:text-white hover:bg-white/[0.07] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            <span>Previous</span>
+          </button>
+
+          <span className="text-xs font-mono text-neutral-400">
+            Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+          </span>
+
+          <button
+            onClick={() => {
+              setPage((p) => p + 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            disabled={page * pageSize >= totalCount || isLoading}
+            className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-mono border border-white/10 bg-white/[0.03] text-neutral-300 hover:text-white hover:bg-white/[0.07] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            <span>Next</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>

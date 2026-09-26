@@ -25,19 +25,43 @@ export function IdeasExplorer({ initialIdeas }: IdeasExplorerProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState("All");
   const [showFilters, setShowFilters] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
-    if (initialIdeas && initialIdeas.length > 0) {
-      setIdeas(initialIdeas);
-    } else {
-      fetch("/api/ideas")
+    // If no query and category is All, revert to initialIdeas or initial fetch
+    if (!searchQuery.trim() && selectedCategory === "All") {
+      if (initialIdeas && initialIdeas.length > 0) {
+        setIdeas(initialIdeas);
+      } else {
+        setIsLoading(true);
+        fetch("/api/ideas")
+          .then((r) => r.json())
+          .then((data) => {
+            if (Array.isArray(data)) setIdeas(data);
+          })
+          .catch(() => {})
+          .finally(() => setIsLoading(false));
+      }
+      return;
+    }
+
+    setIsLoading(true);
+    const handler = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("query", searchQuery.trim());
+      if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory);
+
+      fetch(`/api/ideas?${params.toString()}`)
         .then((r) => r.json())
         .then((data) => {
           if (Array.isArray(data)) setIdeas(data);
         })
-        .catch(() => {});
-    }
-  }, [initialIdeas]);
+        .catch(() => {})
+        .finally(() => setIsLoading(false));
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery, selectedCategory, initialIdeas]);
 
   return (
     <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden">
@@ -58,7 +82,11 @@ export function IdeasExplorer({ initialIdeas }: IdeasExplorerProps) {
         {/* Center Floating Search Capsule */}
         <div className="pointer-events-auto relative flex flex-col items-center min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full border border-white/10 bg-[#0a0c13]/85 backdrop-blur-xl shadow-2xl focus-within:border-indigo-400/50 transition-all max-w-full">
-            <Search className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
+            {isLoading ? (
+              <span className="h-3.5 w-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0" />
+            ) : (
+              <Search className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
+            )}
             <input
               type="text"
               placeholder="Search concepts..."

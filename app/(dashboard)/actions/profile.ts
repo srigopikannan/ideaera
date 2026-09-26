@@ -70,3 +70,18 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath("/dashboard");
   return { success: true, profile: updated };
 }
+
+export async function searchProfilesAction(options: {
+  query?: string;
+  skillFilter?: string;
+  collegeFilter?: string;
+  cityFilter?: string;
+  stateFilter?: string;
+  availabilityFilter?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { searchProfilesPaginated } = await import("@/services/profile");
+  return await searchProfilesPaginated(options);
+}
+

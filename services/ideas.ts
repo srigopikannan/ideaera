@@ -3,6 +3,7 @@ import { Idea, IdeaComment, IdeaValidationFeedback, IdeaValidationData, Project 
 import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
 import { evaluateUserBadges } from "@/services/badges";
 import { createProject } from "@/services/projects";
+import { rateLimiters } from "@/lib/rate-limit";
 
 export function mapIdea(raw: any, isLiked: boolean = false): Idea {
   const authorProfile = raw.creator || raw.author || null;
@@ -73,12 +74,26 @@ export function mapIdea(raw: any, isLiked: boolean = false): Idea {
 export async function getIdeas(
   category?: string,
   sort: "trending" | "popular" | "recent" = "trending",
-  query?: string
+  query?: string,
+  page: number = 1,
+  limit: number = 24
 ): Promise<Idea[]> {
   try {
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     let qb = supabase.from("ideas").select("*, creator:profiles!creator_id(*)");
+
+    // Enforce Visibility at query layer:
+    // - Authenticated: can view public, community, and their own private ideas
+    // - Anonymous: can view only public ideas
+    if (user) {
+      qb = qb.or(`visibility.eq.public,visibility.eq.community,creator_id.eq.${user.id}`);
+    } else {
+      qb = qb.eq("visibility", "public");
+    }
 
     if (category && category !== "All") {
       qb = qb.eq("category", category);
@@ -87,7 +102,16 @@ export async function getIdeas(
       qb = qb.or(`title.ilike.%${query}%,description.ilike.%${query}%,problem.ilike.%${query}%,solution.ilike.%${query}%`);
     }
 
-    qb = qb.order("created_at", { ascending: false }).limit(50);
+    if (sort === "popular") {
+      qb = qb.order("likes_count", { ascending: false }).order("created_at", { ascending: false });
+    } else {
+      qb = qb.order("created_at", { ascending: false });
+    }
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(60, Math.max(1, limit));
+    const offset = (safePage - 1) * safeLimit;
+    qb = qb.range(offset, offset + safeLimit - 1);
 
     const { data, error } = await qb;
     if (data && !error) {
@@ -103,10 +127,23 @@ export async function getIdeas(
 export async function getIdeasByUserId(userId: string): Promise<Idea[]> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    let qb = supabase
       .from("ideas")
       .select("*, creator:profiles!creator_id(id, full_name, username, avatar_url)")
-      .eq("creator_id", userId)
+      .eq("creator_id", userId);
+
+    // If viewing someone else's profile, hide their private ideas
+    if (!user || user.id !== userId) {
+      qb = user
+        ? qb.or("visibility.eq.public,visibility.eq.community")
+        : qb.eq("visibility", "public");
+    }
+
+    const { data, error } = await qb
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -132,18 +169,26 @@ export async function getIdeaById(id: string): Promise<Idea | null> {
       .maybeSingle();
 
     if (data && !error) {
+      // Enforce strict idea visibility protection
+      if (data.visibility === "private" && (!user || user.id !== data.creator_id)) {
+        return null; // Private ideas are strictly creator-only
+      }
+      if (data.visibility === "community" && !user) {
+        return null; // Community ideas require authenticated session
+      }
+
       let isLiked = false;
       if (user) {
         try {
           const { data: likeRow } = await supabase
             .from("idea_likes")
-            .select("idea_id")
+            .select("id")
             .eq("idea_id", id)
             .eq("user_id", user.id)
             .maybeSingle();
           isLiked = Boolean(likeRow);
         } catch {
-          // table may not exist
+          // fallback
         }
       }
       return mapIdea(data, isLiked);
@@ -355,17 +400,27 @@ export async function toggleLikeIdea(id: string): Promise<{ liked: boolean; like
       throw new Error("You must be logged in to upvote an idea.");
     }
 
+    // Rate Limiting Protection (60 likes / min)
+    const rateCheck = rateLimiters.likes.check(user.id);
+    if (!rateCheck.success) {
+      throw new Error("You are upvoting too fast. Please wait a moment.");
+    }
+
     const { data: existing } = await supabase
       .from("idea_likes")
-      .select("*")
+      .select("id")
       .eq("idea_id", id)
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (existing) {
-      await supabase.from("idea_likes").delete().eq("idea_id", id).eq("user_id", user.id);
+      await supabase.from("idea_likes").delete().eq("id", existing.id);
     } else {
-      await supabase.from("idea_likes").insert({ idea_id: id, user_id: user.id });
+      // Insert with unique constraint protection (uq_idea_likes_user_idea)
+      const { error: insertErr } = await supabase.from("idea_likes").insert({ idea_id: id, user_id: user.id });
+      if (insertErr && insertErr.code !== "23505") { // 23505 is unique violation, ignore race-condition duplicate
+        console.error("Error inserting like:", insertErr);
+      }
 
       // Notify idea creator if someone else liked their idea
       try {
@@ -409,8 +464,8 @@ export async function toggleLikeIdea(id: string): Promise<{ liked: boolean; like
 
     const { data: updated } = await supabase.from("ideas").select("likes_count").eq("id", id).single();
     return { liked: !existing, likes_count: updated?.likes_count || 0 };
-  } catch {
-    // If idea_likes table does not exist, return neutral state
+  } catch (err: any) {
+    if (err?.message?.includes("too fast")) throw err;
     return { liked: false, likes_count: 0 };
   }
 }

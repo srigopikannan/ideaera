@@ -7,8 +7,9 @@ import {
   formatProfile,
   isDeletedProfile,
 } from "@/services/profile";
+import { rateLimiters } from "@/lib/rate-limit";
 
-export async function getConversations(): Promise<Conversation[]> {
+export async function getConversations(limit: number = 50): Promise<Conversation[]> {
   try {
     const supabase = await createClient();
     const {
@@ -16,13 +17,15 @@ export async function getConversations(): Promise<Conversation[]> {
     } = await supabase.auth.getUser();
 
     if (user) {
+      const safeScanLimit = Math.min(200, Math.max(20, limit * 3));
       const { data, error } = await supabase
         .from("messages")
         .select(
           "id, conversation_id, sender_id, receiver_id, content, created_at, delivered_at, read_at, is_read, sender:profiles!sender_id(id, full_name, username, avatar_url), receiver:profiles!receiver_id(id, full_name, username, avatar_url)"
         )
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(safeScanLimit);
 
       if (data && !error) {
         // Group by partner
@@ -46,7 +49,7 @@ export async function getConversations(): Promise<Conversation[]> {
             existing.unread_count += 1;
           }
         }
-        return Array.from(convMap.values());
+        return Array.from(convMap.values()).slice(0, limit);
       }
     }
   } catch (err) {
@@ -56,7 +59,11 @@ export async function getConversations(): Promise<Conversation[]> {
   return [];
 }
 
-export async function getMessages(otherUserId: string): Promise<Message[]> {
+export async function getMessages(
+  otherUserId: string,
+  limit: number = 50,
+  beforeTimestamp?: string
+): Promise<Message[]> {
   try {
     const supabase = await createClient();
     const {
@@ -64,7 +71,8 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
     } = await supabase.auth.getUser();
 
     if (user) {
-      const { data, error } = await supabase
+      const safeLimit = Math.min(100, Math.max(1, limit));
+      let qb = supabase
         .from("messages")
         .select(
           "id, conversation_id, sender_id, receiver_id, content, created_at, delivered_at, read_at, is_read, sender:profiles!sender_id(id, full_name, username, avatar_url), receiver:profiles!receiver_id(id, full_name, username, avatar_url)"
@@ -72,7 +80,14 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
         .or(
           `and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`
         )
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(safeLimit);
+
+      if (beforeTimestamp) {
+        qb = qb.lt("created_at", beforeTimestamp);
+      }
+
+      const { data, error } = await qb;
 
       if (data && !error) {
         // Mark unread messages sent to current user as read and delivered
@@ -92,7 +107,8 @@ export async function getMessages(otherUserId: string): Promise<Message[]> {
           console.error("Error marking messages as read in getMessages:", markErr);
         }
 
-        return data as unknown as Message[];
+        // Return in ascending chronological order for UI display
+        return (data as unknown as Message[]).reverse();
       }
     }
   } catch (err) {
@@ -114,6 +130,12 @@ export async function sendMessage(receiverId: string, content: string): Promise<
 
   if (user.id === receiverId) {
     throw new Error("You cannot send a message to yourself.");
+  }
+
+  // Rate Limiting Protection (30 messages / min)
+  const rateCheck = rateLimiters.messages.check(user.id);
+  if (!rateCheck.success) {
+    throw new Error("You are sending messages too quickly. Please wait a moment.");
   }
 
   const conversationId = [user.id, receiverId].sort().join(":");

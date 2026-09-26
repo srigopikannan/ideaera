@@ -30,7 +30,8 @@ export function LoginForm() {
         } = await supabase.auth.getSession();
         if (session && isMounted) {
           const destination = searchParams.get("redirectedFrom") || "/dashboard";
-          router.replace(destination);
+          const target = destination.startsWith("/") ? destination : "/dashboard";
+          router.replace(target);
         }
       } catch {
         // Stay on login page
@@ -70,8 +71,9 @@ export function LoginForm() {
 
       if (data.session) {
         const destination = searchParams.get("redirectedFrom") || "/dashboard";
-        router.push(destination);
+        const target = destination.startsWith("/") ? destination : "/dashboard";
         router.refresh();
+        window.location.assign(target);
       }
     } catch (err: any) {
       setError(err?.message || "An unexpected error occurred. Please try again.");

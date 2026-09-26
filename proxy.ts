@@ -6,22 +6,27 @@ export default async function proxy(request: NextRequest) {
     request,
   });
 
-  // Apply baseline defense-in-depth HTTP security headers
-  supabaseResponse.headers.set("X-Content-Type-Options", "nosniff");
-  supabaseResponse.headers.set("X-Frame-Options", "DENY");
-  supabaseResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  supabaseResponse.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  const applySecurityHeaders = (response: NextResponse) => {
+    response.headers.set("X-Content-Type-Options", "nosniff");
+    response.headers.set("X-Frame-Options", "DENY");
+    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  };
 
-  const supabaseUrl =
+  applySecurityHeaders(supabaseResponse);
+
+  const rawUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     "";
+  const supabaseUrl = rawUrl.trim().replace(/^["']|["']$/g, "");
 
-  const supabaseAnonKey =
+  const rawKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     "";
+  const supabaseAnonKey = rawKey.trim().replace(/^["']|["']$/g, "");
 
   if (supabaseUrl && supabaseAnonKey) {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -38,8 +43,13 @@ export default async function proxy(request: NextRequest) {
           supabaseResponse = NextResponse.next({
             request,
           });
+          applySecurityHeaders(supabaseResponse);
           cookiesToSet.forEach(({ name, value, options }) => {
-            const cookieOptions: any = { ...options };
+            const cookieOptions: any = {
+              path: "/",
+              sameSite: "lax",
+              ...options,
+            };
             if (!isRemember && value) {
               delete cookieOptions.maxAge;
               delete cookieOptions.expires;
@@ -67,7 +77,12 @@ export default async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = destination.startsWith("/") ? destination : "/dashboard";
       url.searchParams.delete("redirectedFrom");
-      return NextResponse.redirect(url);
+      const redirectResponse = NextResponse.redirect(url);
+      applySecurityHeaders(redirectResponse);
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
+      });
+      return redirectResponse;
     }
 
     // Protect dashboard routes if unauthenticated in live mode
@@ -85,7 +100,12 @@ export default async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("redirectedFrom", request.nextUrl.pathname);
-      return NextResponse.redirect(url);
+      const redirectResponse = NextResponse.redirect(url);
+      applySecurityHeaders(redirectResponse);
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
+      });
+      return redirectResponse;
     }
   }
 

@@ -4,16 +4,19 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl =
+  const rawUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     "";
-  const supabaseAnonKey =
+  const supabaseUrl = rawUrl.trim().replace(/^["']|["']$/g, "");
+
+  const rawKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     "";
+  const supabaseAnonKey = rawKey.trim().replace(/^["']|["']$/g, "");
 
   if (!supabaseUrl || !supabaseAnonKey) {
     if (process.env.NODE_ENV !== "production") {
@@ -31,7 +34,11 @@ export async function createClient() {
           const isRemember = cookieStore.get("sb-remember")?.value !== "false";
 
           cookiesToSet.forEach(({ name, value, options }) => {
-            const cookieOptions: any = { ...options };
+            const cookieOptions: any = {
+              path: "/",
+              sameSite: "lax",
+              ...options,
+            };
             if (!isRemember && value) {
               delete cookieOptions.maxAge;
               delete cookieOptions.expires;

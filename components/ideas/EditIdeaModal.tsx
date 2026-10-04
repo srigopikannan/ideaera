@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { X, Loader2, Sparkles, AlertCircle } from "lucide-react";
-import { updateIdeaAction } from "@/app/(dashboard)/actions/ideas";
-import { Idea } from "@/types";
+import { updateIdeaAction, checkSimilarIdeasAction } from "@/app/(dashboard)/actions/ideas";
+import { SimilarIdeasModal } from "@/components/ideas/SimilarIdeasModal";
+import { Idea, SimilarIdeaMatch } from "@/types";
 
 interface EditIdeaModalProps {
   idea: Idea;
@@ -52,6 +53,10 @@ export function EditIdeaModal({
   const [problem, setProblem] = React.useState(initialVals.p);
   const [solution, setSolution] = React.useState(initialVals.s);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = React.useState(false);
+  const [similarMatches, setSimilarMatches] = React.useState<SimilarIdeaMatch[]>([]);
+  const [isSimilarModalOpen, setIsSimilarModalOpen] = React.useState(false);
+  const [acknowledgedDuplicate, setAcknowledgedDuplicate] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -63,12 +68,15 @@ export function EditIdeaModal({
       setProblem(p);
       setSolution(s);
       setError(null);
+      setAcknowledgedDuplicate(false);
+      setSimilarMatches([]);
+      setIsSimilarModalOpen(false);
     }
   }, [isOpen, idea]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isSubmitting) {
+      if (e.key === "Escape" && !isSubmitting && !isSimilarModalOpen) {
         onClose();
       }
     };
@@ -76,23 +84,53 @@ export function EditIdeaModal({
       window.addEventListener("keydown", handleKeyDown);
     }
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
+  }, [isOpen, isSubmitting, isSimilarModalOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceContinue = false) => {
     e.preventDefault();
     if (!title.trim() || !category.trim()) {
       setError("Title and Category are required.");
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
-
     const pTrim = problem.trim();
     const sTrim = solution.trim();
     const desc = (pTrim && sTrim) ? `${pTrim}\n\n${sTrim}` : (pTrim || sTrim || title.trim());
+
+    // Duplicate Check before updating if not yet acknowledged
+    if (!acknowledgedDuplicate && !forceContinue) {
+      setIsCheckingDuplicates(true);
+      setError(null);
+      try {
+        const checkRes = await checkSimilarIdeasAction({
+          title: title.trim(),
+          problem: pTrim,
+          solution: sTrim,
+          description: desc,
+          category,
+          excludeIdeaId: idea.id,
+        });
+
+        if (
+          checkRes.success &&
+          checkRes.hasMatches &&
+          (checkRes.highestSimilarityLevel === "high" || checkRes.highestSimilarityLevel === "medium")
+        ) {
+          setSimilarMatches(checkRes.matches || []);
+          setIsSimilarModalOpen(true);
+          setIsCheckingDuplicates(false);
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Similarity check in edit modal failed:", checkErr);
+      }
+      setIsCheckingDuplicates(false);
+    }
+
+    setIsSubmitting(true);
+    setError(null);
 
     const formData = new FormData();
     formData.append("id", idea.id);
@@ -102,6 +140,7 @@ export function EditIdeaModal({
     formData.append("problem", pTrim);
     formData.append("solution", sTrim);
     formData.append("tags", tags);
+    formData.append("duplicate_warning_acknowledged", String(acknowledgedDuplicate || forceContinue));
 
     try {
       const res = await updateIdeaAction(formData);
@@ -126,6 +165,13 @@ export function EditIdeaModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleContinueAnyway = () => {
+    setIsSimilarModalOpen(false);
+    setAcknowledgedDuplicate(true);
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+    handleSubmit(fakeEvent, true);
   };
 
   return (
@@ -263,10 +309,15 @@ export function EditIdeaModal({
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCheckingDuplicates}
               className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(99,102,241,0.35)]"
             >
-              {isSubmitting ? (
+              {isCheckingDuplicates ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Scanning...</span>
+                </>
+              ) : isSubmitting ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   <span>Saving...</span>
@@ -277,6 +328,15 @@ export function EditIdeaModal({
             </button>
           </div>
         </form>
+
+        {/* Similar Ideas Warning Modal */}
+        <SimilarIdeasModal
+          isOpen={isSimilarModalOpen}
+          onClose={() => setIsSimilarModalOpen(false)}
+          onContinueAnyway={handleContinueAnyway}
+          matches={similarMatches}
+          isSubmitting={isSubmitting}
+        />
       </div>
     </div>
   );

@@ -10,8 +10,118 @@ import {
   deleteIdea,
   archiveIdea,
   checkIdeaDependencies,
+  checkSimilarIdeas,
+  submitIdeaReport,
+  getIdeaReports,
+  getIdeaReportById,
+  moderateIdeaReport,
+  getUserSubmittedReports,
 } from "@/services/ideas";
+import {
+  SimilarIdeaMatch,
+  IdeaReportSubmitResult,
+  IdeaReportModerateResult,
+} from "@/types";
 import { revalidatePath } from "next/cache";
+
+export async function checkSimilarIdeasAction(params: {
+  title: string;
+  problem?: string;
+  solution?: string;
+  description?: string;
+  category?: string;
+  excludeIdeaId?: string;
+}): Promise<{
+  success: boolean;
+  matches?: SimilarIdeaMatch[];
+  maxSimilarity?: number;
+  highestLevel?: "high" | "medium" | "low";
+  highestSimilarityLevel?: "high" | "medium" | "low";
+  hasMatches?: boolean;
+  error?: string;
+}> {
+  try {
+    const res = await checkSimilarIdeas(params);
+    return { success: true, ...res };
+  } catch (err: any) {
+    console.error("Error in checkSimilarIdeasAction:", err);
+    return { success: false, error: err?.message || "Failed to check similar ideas." };
+  }
+}
+
+export async function submitIdeaReportAction(params: {
+  ideaId: string;
+  reason: "possible_copying" | "copyright_ip" | "misleading_ownership" | "other";
+  description: string;
+  originalIdeaId?: string;
+  evidenceUrl?: string;
+}): Promise<IdeaReportSubmitResult> {
+  try {
+    const res = await submitIdeaReport(params);
+    if (res.success) {
+      revalidatePath(`/ideas/${params.ideaId}`);
+      revalidatePath("/moderation");
+    }
+    return res;
+  } catch (err: any) {
+    console.error("Error in submitIdeaReportAction:", err);
+    return { success: false, error: err?.message || "Failed to submit report." };
+  }
+}
+
+export async function getIdeaReportsAction(filter?: {
+  status?: string;
+  reason?: string;
+  limit?: number;
+}) {
+  try {
+    const reports = await getIdeaReports(filter);
+    return { success: true, reports };
+  } catch (err: any) {
+    console.error("Error in getIdeaReportsAction:", err);
+    return { success: false, error: err?.message || "Failed to fetch reports." };
+  }
+}
+
+export async function getIdeaReportByIdAction(reportId: string) {
+  try {
+    const report = await getIdeaReportById(reportId);
+    if (!report) return { success: false, error: "Report not found." };
+    return { success: true, report };
+  } catch (err: any) {
+    console.error("Error in getIdeaReportByIdAction:", err);
+    return { success: false, error: err?.message || "Failed to fetch report." };
+  }
+}
+
+export async function moderateIdeaReportAction(params: {
+  reportId: string;
+  status: "under_review" | "resolved" | "dismissed";
+  resolution?: "no_action" | "violation_confirmed" | "content_restricted" | "dismissed" | "other";
+  resolutionNote?: string;
+}): Promise<IdeaReportModerateResult> {
+  try {
+    const res = await moderateIdeaReport(params);
+    if (res.success) {
+      revalidatePath("/moderation");
+      revalidatePath("/ideas");
+    }
+    return res;
+  } catch (err: any) {
+    console.error("Error in moderateIdeaReportAction:", err);
+    return { success: false, error: err?.message || "Failed to moderate report." };
+  }
+}
+
+export async function getUserSubmittedReportsAction() {
+  try {
+    const reports = await getUserSubmittedReports();
+    return { success: true, reports };
+  } catch (err: any) {
+    console.error("Error in getUserSubmittedReportsAction:", err);
+    return { success: false, error: err?.message || "Failed to fetch user reports." };
+  }
+}
 
 export async function checkIdeaDependenciesAction(ideaId: string) {
   try {
@@ -91,6 +201,9 @@ export async function createIdeaAction(formData: FormData) {
       ? rawSkills.split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
 
+    const duplicate_warning_acknowledged =
+      formData.get("duplicate_warning_acknowledged") === "true";
+
     const created = await createIdea({
       title,
       description,
@@ -100,6 +213,7 @@ export async function createIdeaAction(formData: FormData) {
       solution: solution || undefined,
       visibility,
       skills_needed,
+      duplicate_warning_acknowledged,
     });
 
     revalidatePath("/ideas");
@@ -139,6 +253,9 @@ export async function updateIdeaAction(formData: FormData) {
       ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
 
+    const duplicate_warning_acknowledged =
+      formData.get("duplicate_warning_acknowledged") === "true";
+
     const updated = await updateIdea(id, {
       title,
       description,
@@ -146,6 +263,7 @@ export async function updateIdeaAction(formData: FormData) {
       tags,
       problem: problem || undefined,
       solution: solution || undefined,
+      duplicate_warning_acknowledged,
     });
 
     revalidatePath("/ideas");

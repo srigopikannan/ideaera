@@ -3,7 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createIdeaAction } from "@/app/(dashboard)/actions/ideas";
+import { createIdeaAction, checkSimilarIdeasAction } from "@/app/(dashboard)/actions/ideas";
+import { SimilarIdeasModal } from "@/components/ideas/SimilarIdeasModal";
+import { SimilarIdeaMatch } from "@/types";
 import {
   ArrowLeft,
   Sparkles,
@@ -72,6 +74,10 @@ function CreateIdeaContent() {
   const [solution, setSolution] = React.useState("");
   const [visibility, setVisibility] = React.useState<"public" | "community" | "selected" | "private">("public");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = React.useState(false);
+  const [similarMatches, setSimilarMatches] = React.useState<SimilarIdeaMatch[]>([]);
+  const [isSimilarModalOpen, setIsSimilarModalOpen] = React.useState(false);
+  const [acknowledgedDuplicate, setAcknowledgedDuplicate] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -179,7 +185,7 @@ function CreateIdeaContent() {
     };
   }, [title, problem, solution, category, activeCategoryConfig, tagList]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceContinue = false) => {
     e.preventDefault();
     if (!title.trim()) {
       setError("Please provide a name for your concept.");
@@ -198,6 +204,35 @@ function CreateIdeaContent() {
       return;
     }
 
+    // Similarity Check if not yet acknowledged and not forced
+    if (!acknowledgedDuplicate && !forceContinue) {
+      setIsCheckingDuplicates(true);
+      setError(null);
+      try {
+        const checkRes = await checkSimilarIdeasAction({
+          title: title.trim(),
+          problem: effectiveProblem,
+          solution: effectiveSolution,
+          description: effectiveDescription,
+          category,
+        });
+
+        if (
+          checkRes.success &&
+          checkRes.hasMatches &&
+          (checkRes.highestSimilarityLevel === "high" || checkRes.highestSimilarityLevel === "medium")
+        ) {
+          setSimilarMatches(checkRes.matches || []);
+          setIsSimilarModalOpen(true);
+          setIsCheckingDuplicates(false);
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Similarity check skipped due to error:", checkErr);
+      }
+      setIsCheckingDuplicates(false);
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -209,6 +244,7 @@ function CreateIdeaContent() {
     formData.append("solution", effectiveSolution);
     formData.append("description", effectiveDescription);
     formData.append("visibility", visibility);
+    formData.append("duplicate_warning_acknowledged", String(acknowledgedDuplicate || forceContinue));
     if (tags.trim()) {
       formData.append("skills_needed", tags.trim());
     }
@@ -227,6 +263,13 @@ function CreateIdeaContent() {
       setError(err?.message || "Failed to ignite concept.");
       setIsSubmitting(false);
     }
+  };
+
+  const handleContinueAnyway = () => {
+    setIsSimilarModalOpen(false);
+    setAcknowledgedDuplicate(true);
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+    handleSubmit(fakeEvent, true);
   };
 
   return (
@@ -434,14 +477,37 @@ function CreateIdeaContent() {
         <div className="pt-4 flex items-center justify-center">
           <button
             type="submit"
-            disabled={isSubmitting || !title.trim()}
+            disabled={isSubmitting || isCheckingDuplicates || !title.trim()}
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all shadow-2xl hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Send className="h-3.5 w-3.5" />
-            <span>{isSubmitting ? "Igniting Concept..." : "Ignite Idea Into Orbit"}</span>
+            {isCheckingDuplicates ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Scanning Ecosystem...</span>
+              </>
+            ) : isSubmitting ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Igniting Concept...</span>
+              </>
+            ) : (
+              <>
+                <Send className="h-3.5 w-3.5" />
+                <span>Ignite Idea Into Orbit</span>
+              </>
+            )}
           </button>
         </div>
       </form>
+
+      {/* Similar Concepts Modal Warning */}
+      <SimilarIdeasModal
+        isOpen={isSimilarModalOpen}
+        onClose={() => setIsSimilarModalOpen(false)}
+        onContinueAnyway={handleContinueAnyway}
+        matches={similarMatches}
+        isSubmitting={isSubmitting}
+      />
 
       {/* Footer Philosophy Note */}
       <div className="text-center text-[10px] font-mono text-neutral-600 uppercase tracking-widest z-10">

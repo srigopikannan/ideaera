@@ -34,6 +34,7 @@ export interface Profile {
   availability_hours?: string | null;
   created_at: string;
   updated_at: string;
+  role?: 'user' | 'admin' | 'moderator';
   connection_status?: 'none' | 'pending_sent' | 'pending_received' | 'connected';
   mutual_connections_count?: number;
 }
@@ -57,6 +58,8 @@ export interface Idea {
   display_id?: string;
   author_id: string;
   author?: Profile;
+  creator_id?: string;
+  creator?: Profile;
   title: string;
   description: string;
   problem?: string | null;
@@ -77,6 +80,9 @@ export interface Idea {
   deleted_at?: string | null;
   deleted_by?: string | null;
   is_liked?: boolean;
+  duplicate_warning_acknowledged?: boolean;
+  moderation_status?: 'active' | 'flagged' | 'under_review' | 'restricted';
+  moderation_note?: string | null;
   validation_status?: 'not_validated' | 'testing' | 'validated';
   validation_target_users?: string | null;
   validation_why_it_matters?: string | null;
@@ -90,6 +96,78 @@ export interface Idea {
     impractical: number;
     percentage: number;
   };
+}
+
+export interface SimilarIdeaMatch {
+  id: string;
+  display_id: string;
+  title: string;
+  category: string;
+  visibility: string;
+  created_at: string;
+  creator: {
+    id: string;
+    full_name: string;
+    username: string;
+    avatar_url?: string | null;
+  };
+  similarity_score: number;
+  similarity_percentage: number;
+  similarity_level: 'high' | 'medium' | 'low';
+  preview: string;
+}
+
+export type IdeaReportReason =
+  | 'possible_copying'
+  | 'copyright_ip'
+  | 'misleading_ownership'
+  | 'other';
+
+export type IdeaReportStatus =
+  | 'pending'
+  | 'under_review'
+  | 'resolved'
+  | 'dismissed';
+
+export type IdeaReportResolution =
+  | 'no_action'
+  | 'violation_confirmed'
+  | 'content_restricted'
+  | 'dismissed'
+  | 'other';
+
+export interface IdeaReport {
+  id: string;
+  idea_id: string;
+  idea?: Idea;
+  reporter_id: string;
+  reporter?: Profile;
+  original_idea_id?: string | null;
+  original_idea?: Idea | null;
+  reason: IdeaReportReason;
+  description: string;
+  evidence_url?: string | null;
+  status: IdeaReportStatus;
+  resolution?: IdeaReportResolution | null;
+  resolution_note?: string | null;
+  reviewed_by?: string | null;
+  reviewer?: Profile | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IdeaReportSubmitResult {
+  success: boolean;
+  report?: IdeaReport;
+  error?: string;
+  code?: 'ALREADY_REPORTED' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'CANNOT_REPORT_OWN_IDEA' | 'INVALID_INPUT';
+}
+
+export interface IdeaReportModerateResult {
+  success: boolean;
+  report?: IdeaReport;
+  error?: string;
 }
 
 export interface IdeaDependencyProject {

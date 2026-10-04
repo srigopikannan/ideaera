@@ -37,7 +37,9 @@ import {
 import { cn } from "@/lib/utils";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { EditIdeaModal } from "@/components/ideas/EditIdeaModal";
+import { ReportIdeaModal } from "@/components/ideas/ReportIdeaModal";
 import { CelestialIdeaCore } from "@/components/ideas/CelestialIdeaCore";
+import { ShieldAlert } from "lucide-react";
 
 interface IdeaDetailViewProps {
   idea: Idea;
@@ -71,6 +73,7 @@ export function IdeaDetailView({
   const [copied, setCopied] = React.useState(false);
   const [idCopied, setIdCopied] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = React.useState(false);
 
   const displayId = currentIdea.display_id || ("IDEA-" + currentIdea.id.substring(0, 8).toUpperCase());
 
@@ -303,6 +306,17 @@ export function IdeaDetailView({
             <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
           </button>
 
+          {!isOwner && currentUser?.id && (
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-mono bg-[#0a0c13]/80 text-neutral-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-colors backdrop-blur-xl shadow-lg"
+              title="Report concept duplication or IP infringement"
+            >
+              <ShieldAlert className="h-3 w-3" />
+              <span className="hidden sm:inline">Report</span>
+            </button>
+          )}
+
           {isOwner && (
             <div className="relative" ref={menuRef}>
               <button
@@ -337,6 +351,29 @@ export function IdeaDetailView({
           )}
         </div>
       </div>
+
+      {/* Moderation Status Banner */}
+      {currentIdea.moderation_status === "under_review" && (
+        <div className="max-w-6xl mx-auto px-5 sm:px-12 pt-4">
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-200 text-xs font-mono">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-indigo-400" />
+            <span>
+              <strong>Under Moderation Review:</strong> This concept is currently under routine review by platform administrators.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {currentIdea.moderation_status === "restricted" && (
+        <div className="max-w-6xl mx-auto px-5 sm:px-12 pt-4">
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-xs font-mono">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-red-400" />
+            <span>
+              <strong>Access Restricted:</strong> Public visibility for this concept has been restricted following moderation review.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Archived Status Warning Banner */}
       {(currentIdea.status === "archived" || currentIdea.deleted_at) && (
@@ -640,6 +677,29 @@ export function IdeaDetailView({
           </div>
         </div>
 
+        {/* Concept Authorship & Integrity Card */}
+        {!isOwner && currentUser?.id && (
+          <div className="max-w-3xl p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-neutral-400" />
+                <h5 className="text-xs font-mono uppercase tracking-wider text-neutral-200">
+                  Concept Authorship & Integrity
+                </h5>
+              </div>
+              <p className="text-xs text-neutral-400 font-light leading-relaxed">
+                Notice an intellectual property violation, copyright infringement, or direct copying of another idea?
+              </p>
+            </div>
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-4 py-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-red-500/10 hover:border-red-500/30 text-xs font-mono text-neutral-300 hover:text-red-300 transition-colors shrink-0"
+            >
+              Report Concept
+            </button>
+          </div>
+        )}
+
         {/* Version History Log */}
         {currentIdea.version_history && currentIdea.version_history.length > 0 && (
           <div className="max-w-3xl space-y-3">
@@ -759,6 +819,13 @@ export function IdeaDetailView({
           setCurrentIdea((prev) => ({ ...prev, ...updated }));
           router.refresh();
         }}
+      />
+
+      {/* Report Idea Modal */}
+      <ReportIdeaModal
+        idea={currentIdea}
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
       />
     </div>
   );

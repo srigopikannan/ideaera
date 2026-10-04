@@ -17,6 +17,7 @@ import {
   User,
   Settings,
   LayoutDashboard,
+  ShieldAlert,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -54,6 +55,7 @@ export function AppSidebar() {
     name: string;
     username: string;
     avatar_url?: string | null;
+    role?: string;
   }>({
     name: "Explorer",
     username: "explorer",
@@ -72,7 +74,7 @@ export function AppSidebar() {
         if (user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("id, full_name, username, avatar_url")
+            .select("id, full_name, username, avatar_url, role")
             .eq("id", user.id)
             .maybeSingle();
 
@@ -84,6 +86,7 @@ export function AppSidebar() {
               name: profile.full_name || "Innovator",
               username: profile.username || "innovator",
               avatar_url: profile.avatar_url,
+              role: profile.role || "user",
             });
           } else {
             setCurrentUser({
@@ -91,6 +94,7 @@ export function AppSidebar() {
               name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Innovator",
               username: user.user_metadata?.username || user.email?.split("@")[0] || "innovator",
               avatar_url: user.user_metadata?.avatar_url,
+              role: "user",
             });
           }
         } else {
@@ -235,6 +239,36 @@ export function AppSidebar() {
             })}
           </nav>
         </div>
+
+        {/* Administration Navigation (Admin & Moderator only) */}
+        {(currentUser.role === "admin" || currentUser.role === "moderator") && (
+          <div>
+            <div className="px-3 pb-2 text-[10px] font-mono font-medium text-amber-500/80 uppercase tracking-[0.25em] flex items-center justify-between">
+              <span>Admin Control</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+            </div>
+            <nav className="space-y-1">
+              <Link
+                href="/moderation"
+                prefetch={true}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-xl text-xs uppercase tracking-[0.16em] font-medium transition-all",
+                  isActive("/moderation")
+                    ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400 pl-2.5 shadow-sm"
+                    : "text-amber-300/70 hover:text-amber-200 hover:bg-amber-500/10"
+                )}
+              >
+                <ShieldAlert
+                  className={cn(
+                    "h-4 w-4",
+                    isActive("/moderation") ? "text-amber-300" : "text-amber-400/70 group-hover:text-amber-300"
+                  )}
+                />
+                <span>Moderation</span>
+              </Link>
+            </nav>
+          </div>
+        )}
       </div>
 
       {/* User Footer */}

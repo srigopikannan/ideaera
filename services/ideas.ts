@@ -1,5 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
-import { Idea, IdeaComment, IdeaValidationFeedback, IdeaValidationData, Project, IdeaDependencyProject, IdeaDeleteResult } from "@/types";
+import {
+  Idea,
+  IdeaComment,
+  IdeaValidationFeedback,
+  IdeaValidationData,
+  Project,
+  IdeaDependencyProject,
+  IdeaDeleteResult,
+  SimilarIdeaMatch,
+  IdeaReport,
+  IdeaReportSubmitResult,
+  IdeaReportModerateResult,
+} from "@/types";
 import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
 import { evaluateUserBadges } from "@/services/badges";
 import { createProject } from "@/services/projects";
@@ -70,6 +82,9 @@ export function mapIdea(raw: any, isLiked: boolean = false): Idea {
     comments_count: raw.comments_count || 0,
     deleted_at: raw.deleted_at || null,
     deleted_by: raw.deleted_by || null,
+    duplicate_warning_acknowledged: Boolean(raw.duplicate_warning_acknowledged),
+    moderation_status: raw.moderation_status || "active",
+    moderation_note: raw.moderation_note || null,
     validation_status: raw.validation_status || "not_validated",
     validation_target_users: raw.validation_target_users || null,
     validation_why_it_matters: raw.validation_why_it_matters || null,
@@ -262,6 +277,7 @@ export async function createIdea(data: {
   skills_needed?: string[];
   collaboration_info?: string;
   goals?: string;
+  duplicate_warning_acknowledged?: boolean;
 }): Promise<Idea> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -290,6 +306,7 @@ export async function createIdea(data: {
       stage: "Idea",
       visibility: data.visibility || "public",
       creator_id: user.id,
+      duplicate_warning_acknowledged: Boolean(data.duplicate_warning_acknowledged),
     })
     .select("*, creator:profiles!creator_id(*)")
     .single();
@@ -315,6 +332,7 @@ export async function updateIdea(
     tags: string[];
     problem?: string;
     solution?: string;
+    duplicate_warning_acknowledged?: boolean;
   }
 ): Promise<Idea> {
   const supabase = await createClient();
@@ -360,19 +378,25 @@ export async function updateIdea(
 
   let updated: any = null;
 
+  const updateFields: any = {
+    title: data.title.trim(),
+    description,
+    problem,
+    solution,
+    category: data.category,
+    version: nextVer,
+    version_history: nextHistory,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.duplicate_warning_acknowledged !== undefined) {
+    updateFields.duplicate_warning_acknowledged = Boolean(data.duplicate_warning_acknowledged);
+  }
+
   try {
     const { data: resData, error: updateErr } = await supabase
       .from("ideas")
-      .update({
-        title: data.title.trim(),
-        description,
-        problem,
-        solution,
-        category: data.category,
-        version: nextVer,
-        version_history: nextHistory,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateFields)
       .eq("id", id)
       .eq("creator_id", user.id)
       .select("*, creator:profiles!creator_id(*)")
@@ -381,17 +405,12 @@ export async function updateIdea(
     if (!updateErr && resData) {
       updated = resData;
     } else {
-      // Fallback if version/version_history columns not yet applied
+      // Fallback
+      delete updateFields.version;
+      delete updateFields.version_history;
       const { data: fallbackData } = await supabase
         .from("ideas")
-        .update({
-          title: data.title.trim(),
-          description,
-          problem,
-          solution,
-          category: data.category,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateFields)
         .eq("id", id)
         .eq("creator_id", user.id)
         .select("*, creator:profiles!creator_id(*)")
@@ -1024,5 +1043,421 @@ export async function convertIdeaToProject(ideaId: string): Promise<Project> {
     .eq("id", ideaId);
 
   return project;
+}
+
+/* =========================================================================
+   FEATURE: 🔍 DUPLICATE IDEA DETECTION
+   ========================================================================= */
+
+export async function checkSimilarIdeas(params: {
+  title: string;
+  problem?: string;
+  solution?: string;
+  description?: string;
+  category?: string;
+  excludeIdeaId?: string;
+  threshold?: number;
+  limit?: number;
+}): Promise<{
+  matches: SimilarIdeaMatch[];
+  maxSimilarity: number;
+  highestLevel: "high" | "medium" | "low";
+  highestSimilarityLevel: "high" | "medium" | "low";
+  hasMatches: boolean;
+}> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const cleanTitle = (params.title || "").trim();
+    if (!cleanTitle || cleanTitle.length < 3) {
+      return { matches: [], maxSimilarity: 0, highestLevel: "low", highestSimilarityLevel: "low", hasMatches: false };
+    }
+
+    const { data, error } = await supabase.rpc("detect_duplicate_ideas", {
+      p_title: cleanTitle,
+      p_problem: params.problem?.trim() || null,
+      p_solution: params.solution?.trim() || null,
+      p_description: params.description?.trim() || null,
+      p_category: params.category || null,
+      p_exclude_idea_id: params.excludeIdeaId || null,
+      p_viewer_id: user?.id || null,
+      p_threshold: params.threshold ?? 0.35,
+      p_limit: params.limit ?? 5,
+    });
+
+    if (error) {
+      console.error("Error calling detect_duplicate_ideas RPC:", error);
+      return { matches: [], maxSimilarity: 0, highestLevel: "low", highestSimilarityLevel: "low", hasMatches: false };
+    }
+
+    const matches: SimilarIdeaMatch[] = Array.isArray(data) ? data : [];
+    let maxSimilarity = 0;
+    for (const m of matches) {
+      if (typeof m.similarity_score === "number" && m.similarity_score > maxSimilarity) {
+        maxSimilarity = m.similarity_score;
+      }
+    }
+
+    const highestLevel =
+      maxSimilarity >= 0.65 ? "high" : maxSimilarity >= 0.35 ? "medium" : "low";
+
+    const hasMatches = matches.length > 0;
+    return {
+      matches,
+      maxSimilarity,
+      highestLevel,
+      highestSimilarityLevel: highestLevel,
+      hasMatches,
+    };
+  } catch (err) {
+    console.error("Error in checkSimilarIdeas:", err);
+    return { matches: [], maxSimilarity: 0, highestLevel: "low", highestSimilarityLevel: "low", hasMatches: false };
+  }
+}
+
+/* =========================================================================
+   FEATURE: 🚨 IDEA REPORTING & MODERATION SYSTEM
+   ========================================================================= */
+
+export async function submitIdeaReport(params: {
+  ideaId: string;
+  reason: "possible_copying" | "copyright_ip" | "misleading_ownership" | "other";
+  description: string;
+  originalIdeaId?: string;
+  evidenceUrl?: string;
+}): Promise<IdeaReportSubmitResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, code: "UNAUTHORIZED", error: "You must be logged in to report an idea." };
+  }
+
+  // 1. Fetch idea to verify existence and check that user isn't reporting their own idea
+  const { data: idea, error: ideaErr } = await supabase
+    .from("ideas")
+    .select("id, title, creator_id")
+    .eq("id", params.ideaId)
+    .maybeSingle();
+
+  if (ideaErr || !idea) {
+    return { success: false, code: "NOT_FOUND", error: "Idea not found." };
+  }
+
+  if (idea.creator_id === user.id) {
+    return {
+      success: false,
+      code: "CANNOT_REPORT_OWN_IDEA",
+      error: "You cannot report your own idea.",
+    };
+  }
+
+  const desc = (params.description || "").trim();
+  if (desc.length < 10) {
+    return {
+      success: false,
+      code: "INVALID_INPUT",
+      error: "Please provide a detailed explanation of at least 10 characters.",
+    };
+  }
+
+  // 2. Check for active pending/under_review report from this user for this idea (anti-abuse)
+  const { data: existingReport } = await supabase
+    .from("idea_reports")
+    .select("id, status")
+    .eq("idea_id", params.ideaId)
+    .eq("reporter_id", user.id)
+    .in("status", ["pending", "under_review"])
+    .maybeSingle();
+
+  if (existingReport) {
+    return {
+      success: false,
+      code: "ALREADY_REPORTED",
+      error: "You have already submitted a report for this idea that is pending review.",
+    };
+  }
+
+  // 3. Verify original idea if specified
+  let validOriginalIdeaId: string | null = null;
+  if (params.originalIdeaId && params.originalIdeaId !== params.ideaId) {
+    const { data: origIdea } = await supabase
+      .from("ideas")
+      .select("id")
+      .eq("id", params.originalIdeaId)
+      .maybeSingle();
+    if (origIdea) {
+      validOriginalIdeaId = origIdea.id;
+    }
+  }
+
+  // 4. Insert report
+  const { data: inserted, error: insertErr } = await supabase
+    .from("idea_reports")
+    .insert({
+      idea_id: params.ideaId,
+      reporter_id: user.id,
+      original_idea_id: validOriginalIdeaId,
+      reason: params.reason,
+      description: desc,
+      evidence_url: params.evidenceUrl?.trim() || null,
+      status: "pending",
+    })
+    .select("*, idea:ideas(*), reporter:profiles(*)")
+    .single();
+
+  if (insertErr || !inserted) {
+    console.error("Error inserting idea_report:", insertErr);
+    return { success: false, error: insertErr?.message || "Failed to submit report. Please try again." };
+  }
+
+  return { success: true, report: inserted as any };
+}
+
+export async function getIdeaReports(filter?: {
+  status?: string;
+  reason?: string;
+  limit?: number;
+}): Promise<IdeaReport[]> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    let qb = supabase
+      .from("idea_reports")
+      .select(`
+        *,
+        idea:ideas(*, creator:profiles!creator_id(*)),
+        reporter:profiles!reporter_id(*),
+        original_idea:ideas!original_idea_id(*, creator:profiles!creator_id(*)),
+        reviewer:profiles!reviewed_by(*)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (filter?.status && filter.status !== "all") {
+      qb = qb.eq("status", filter.status);
+    }
+    if (filter?.reason && filter.reason !== "all") {
+      qb = qb.eq("reason", filter.reason);
+    }
+    if (filter?.limit) {
+      qb = qb.limit(filter.limit);
+    }
+
+    const { data, error } = await qb;
+    if (error) {
+      console.error("Error fetching idea_reports:", error);
+      return [];
+    }
+
+    return (data || []) as any[];
+  } catch (err) {
+    console.error("Error in getIdeaReports:", err);
+    return [];
+  }
+}
+
+export async function getIdeaReportById(reportId: string): Promise<IdeaReport | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("idea_reports")
+      .select(`
+        *,
+        idea:ideas(*, creator:profiles!creator_id(*)),
+        reporter:profiles!reporter_id(*),
+        original_idea:ideas!original_idea_id(*, creator:profiles!creator_id(*)),
+        reviewer:profiles!reviewed_by(*)
+      `)
+      .eq("id", reportId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as any;
+  } catch (err) {
+    console.error("Error in getIdeaReportById:", err);
+    return null;
+  }
+}
+
+export async function moderateIdeaReport(params: {
+  reportId: string;
+  status: "under_review" | "resolved" | "dismissed";
+  resolution?: "no_action" | "violation_confirmed" | "content_restricted" | "dismissed" | "other";
+  resolutionNote?: string;
+}): Promise<IdeaReportModerateResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Authentication required." };
+  }
+
+  // Verify admin authorization
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "admin" && profile?.role !== "moderator") {
+    return { success: false, error: "Unauthorized: only administrators can moderate reports." };
+  }
+
+  // 1. Fetch report details
+  const { data: report, error: fetchErr } = await supabase
+    .from("idea_reports")
+    .select("*, idea:ideas(id, title, creator_id)")
+    .eq("id", params.reportId)
+    .maybeSingle();
+
+  if (fetchErr || !report) {
+    return { success: false, error: "Report not found." };
+  }
+
+  const updatePayload: any = {
+    status: params.status,
+    reviewed_by: user.id,
+    reviewed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (params.resolution) {
+    updatePayload.resolution = params.resolution;
+  }
+  if (params.resolutionNote !== undefined) {
+    updatePayload.resolution_note = params.resolutionNote?.trim() || null;
+  }
+
+  // 2. Update report
+  const { data: updatedReport, error: updateErr } = await supabase
+    .from("idea_reports")
+    .update(updatePayload)
+    .eq("id", params.reportId)
+    .select(`
+      *,
+      idea:ideas(*, creator:profiles!creator_id(*)),
+      reporter:profiles!reporter_id(*),
+      original_idea:ideas!original_idea_id(*, creator:profiles!creator_id(*)),
+      reviewer:profiles!reviewed_by(*)
+    `)
+    .single();
+
+  if (updateErr || !updatedReport) {
+    return { success: false, error: updateErr?.message || "Failed to update report." };
+  }
+
+  // 3. Apply Content Restriction if violation confirmed
+  if (params.resolution === "content_restricted" || params.resolution === "violation_confirmed") {
+    await supabase
+      .from("ideas")
+      .update({
+        moderation_status: "restricted",
+        visibility: "private",
+        moderation_note: params.resolutionNote || "Restricted by platform administration following moderation review.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", report.idea_id);
+  }
+
+  // 4. Send notifications
+  try {
+    const ideaTitle = report.idea?.title || "your concept";
+
+    // A. Notify Reporter of status update
+    let reporterMsg = `Your report for idea "${ideaTitle}" has been updated to: ${params.status.replace("_", " ")}.`;
+    if (params.status === "dismissed") {
+      reporterMsg = `Your report for idea "${ideaTitle}" was reviewed and dismissed. ${params.resolutionNote ? `Note: ${params.resolutionNote}` : ""}`;
+    } else if (params.status === "resolved") {
+      reporterMsg = `Your report for idea "${ideaTitle}" was reviewed and resolved. Action: ${params.resolution || "completed"}.`;
+    }
+
+    await supabase.from("notifications").insert({
+      recipient_id: report.reporter_id,
+      user_id: report.reporter_id,
+      actor_id: user.id,
+      type: "idea_report_update",
+      title: "🛡️ Report Status Update",
+      message: reporterMsg,
+      idea_id: report.idea_id,
+      related_id: report.id,
+      read: false,
+      is_read: false,
+      data: {
+        report_id: report.id,
+        status: params.status,
+        resolution: params.resolution,
+      },
+    });
+
+    // B. Confidential Notification to Reported Idea Creator if action taken or under review
+    if (report.idea?.creator_id && report.idea.creator_id !== user.id) {
+      if (params.status === "under_review") {
+        await supabase.from("notifications").insert({
+          recipient_id: report.idea.creator_id,
+          user_id: report.idea.creator_id,
+          actor_id: user.id,
+          type: "idea_moderation_review",
+          title: "Notice: Concept Under Review",
+          message: `Your idea "${ideaTitle}" has been flagged for moderation review by platform administrators. No action is required at this time.`,
+          idea_id: report.idea_id,
+          related_id: report.id,
+          read: false,
+          is_read: false,
+        });
+      } else if (params.resolution === "content_restricted" || params.resolution === "violation_confirmed") {
+        await supabase.from("notifications").insert({
+          recipient_id: report.idea.creator_id,
+          user_id: report.idea.creator_id,
+          actor_id: user.id,
+          type: "idea_moderation_action",
+          title: "⚠️ Moderation Decision Notice",
+          message: `Following administrative review, content access for idea "${ideaTitle}" has been restricted. ${params.resolutionNote ? `Reason: ${params.resolutionNote}` : ""}`,
+          idea_id: report.idea_id,
+          related_id: report.id,
+          read: false,
+          is_read: false,
+        });
+      }
+    }
+  } catch (notifErr) {
+    console.error("Error creating report notifications:", notifErr);
+  }
+
+  return { success: true, report: updatedReport as any };
+}
+
+export async function getUserSubmittedReports(): Promise<IdeaReport[]> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from("idea_reports")
+      .select("*, idea:ideas(id, title, category, display_id)")
+      .eq("reporter_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) return [];
+    return (data || []) as any[];
+  } catch (err) {
+    console.error("Error in getUserSubmittedReports:", err);
+    return [];
+  }
 }
 

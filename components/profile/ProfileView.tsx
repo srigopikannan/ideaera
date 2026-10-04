@@ -7,7 +7,7 @@ import { Profile, Project, Idea } from "@/types";
 import { UserBadgesResult } from "@/services/badges";
 import { AchievementsSection } from "@/components/profile/AchievementsSection";
 import { requestConnectionAction } from "@/app/(dashboard)/actions/social";
-import { deleteIdeaAction } from "@/app/(dashboard)/actions/ideas";
+import { deleteIdeaAction, archiveIdeaAction, checkIdeaDependenciesAction } from "@/app/(dashboard)/actions/ideas";
 import { deleteProjectAction } from "@/app/(dashboard)/actions/projects";
 import { formatDate } from "@/lib/utils";
 import {
@@ -67,6 +67,9 @@ export function ProfileView({
   // Deletion modal state
   const [deleteTarget, setDeleteTarget] = React.useState<{ type: "idea" | "project"; id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isArchiving, setIsArchiving] = React.useState(false);
+  const [hasDependencies, setHasDependencies] = React.useState(false);
+  const [dependentProjects, setDependentProjects] = React.useState<Array<{ id: string; name: string; status?: string }>>([]);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   const handleConnect = async (type: "public" | "private" = "private") => {
@@ -103,9 +106,15 @@ export function ProfileView({
         const res = await deleteIdeaAction(deleteTarget.id);
         if (res.success) {
           setDeleteTarget(null);
+          setHasDependencies(false);
+          setDependentProjects([]);
           router.refresh();
+        } else if (res.code === "IDEA_HAS_DEPENDENCIES") {
+          setHasDependencies(true);
+          setDependentProjects(res.dependencies?.projects || []);
+          setDeleteError(null);
         } else {
-          setDeleteError(res.error || "Failed to delete idea.");
+          setDeleteError(res.error || res.message || "Failed to delete idea.");
         }
       } else {
         const res = await deleteProjectAction(deleteTarget.id);
@@ -117,9 +126,37 @@ export function ProfileView({
         }
       }
     } catch (err: any) {
-      setDeleteError(err?.message || "An unexpected error occurred.");
+      if (err?.code === "IDEA_HAS_DEPENDENCIES") {
+        setHasDependencies(true);
+        setDependentProjects(err.dependencies?.projects || []);
+        setDeleteError(null);
+      } else {
+        setDeleteError(err?.message || "An unexpected error occurred.");
+      }
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (!deleteTarget || deleteTarget.type !== "idea") return;
+    setIsArchiving(true);
+    setDeleteError(null);
+
+    try {
+      const res = await archiveIdeaAction(deleteTarget.id);
+      if (res.success) {
+        setDeleteTarget(null);
+        setHasDependencies(false);
+        setDependentProjects([]);
+        router.refresh();
+      } else {
+        setDeleteError(res.error || res.message || "Failed to archive idea.");
+      }
+    } catch (err: any) {
+      setDeleteError(err?.message || "An unexpected error occurred while archiving.");
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -545,12 +582,22 @@ export function ProfileView({
 
                           {isCurrentUser && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 setDeleteTarget({
                                   type: "idea",
                                   id: idea.id,
                                   name: idea.title,
                                 });
+                                setDeleteError(null);
+                                setHasDependencies(false);
+                                setDependentProjects([]);
+                                try {
+                                  const dep = await checkIdeaDependenciesAction(idea.id);
+                                  if (dep.success && dep.hasDependencies) {
+                                    setHasDependencies(true);
+                                    setDependentProjects(dep.projects || []);
+                                  }
+                                } catch {}
                               }}
                               className="text-neutral-600 hover:text-red-400 transition-colors"
                               title="Delete idea"
@@ -659,16 +706,22 @@ export function ProfileView({
         </div>
       </div>
 
-      {/* Deletion Confirmation Modal */}
+      {/* Deletion / Archive Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={Boolean(deleteTarget)}
         onClose={() => {
-          if (!isDeleting) {
+          if (!isDeleting && !isArchiving) {
             setDeleteTarget(null);
             setDeleteError(null);
+            setHasDependencies(false);
+            setDependentProjects([]);
           }
         }}
         onConfirm={handleDeleteConfirm}
+        onArchive={handleArchiveConfirm}
+        hasDependencies={hasDependencies}
+        dependentProjects={dependentProjects}
+        isArchiving={isArchiving}
         title={"Delete " + (deleteTarget?.type === "idea" ? "Idea" : "Project")}
         description={`Are you sure you want to permanently delete "${deleteTarget?.name || ""}"? This action cannot be undone.`}
         isDeleting={isDeleting}

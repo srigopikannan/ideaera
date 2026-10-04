@@ -80,11 +80,13 @@ export async function getPersonalInnovationDashboard(
 
   const userSkills: string[] = Array.isArray(userProfile?.skills) ? userProfile.skills : [];
 
-  // 2. Fetch User's Ideas
+  // 2. Fetch User's Ideas (active only)
   const { data: rawIdeas } = await supabase
     .from("ideas")
     .select("*, creator:profiles!creator_id(*)")
     .eq("creator_id", userId)
+    .is("deleted_at", null)
+    .neq("status", "archived")
     .order("created_at", { ascending: false });
 
   const userIdeas: Idea[] = (rawIdeas || []).map((r) => mapIdea(r, false));

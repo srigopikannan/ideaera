@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Idea, IdeaComment, IdeaValidationFeedback, IdeaValidationData, Project } from "@/types";
+import { Idea, IdeaComment, IdeaValidationFeedback, IdeaValidationData, Project, IdeaDependencyProject, IdeaDeleteResult } from "@/types";
 import { checkAndCreateIdeaMilestoneNotification } from "@/services/social";
 import { evaluateUserBadges } from "@/services/badges";
 import { createProject } from "@/services/projects";
@@ -39,6 +39,15 @@ export function mapIdea(raw: any, isLiked: boolean = false): Idea {
 
   const displayId = `IDEA-${String(raw.id).substring(0, 8).toUpperCase()}`;
 
+  let status: Idea["status"] = "open";
+  if (raw.status === "archived" || raw.deleted_at) {
+    status = "archived";
+  } else if (raw.stage?.toLowerCase() === "implemented") {
+    status = "implemented";
+  } else if (raw.stage?.toLowerCase() === "in_progress") {
+    status = "in_progress";
+  }
+
   return {
     id: raw.id,
     display_id: displayId,
@@ -55,10 +64,12 @@ export function mapIdea(raw: any, isLiked: boolean = false): Idea {
     version_history: Array.isArray(raw.version_history) ? raw.version_history : [],
     category: raw.category || "AI & Machine Learning",
     tags: parsedTags,
-    status: (raw.stage?.toLowerCase() === "implemented" ? "implemented" : raw.stage?.toLowerCase() === "in_progress" ? "in_progress" : "open") as any,
+    status,
     visibility: raw.visibility || "public",
     likes_count: raw.likes_count || 0,
     comments_count: raw.comments_count || 0,
+    deleted_at: raw.deleted_at || null,
+    deleted_by: raw.deleted_by || null,
     validation_status: raw.validation_status || "not_validated",
     validation_target_users: raw.validation_target_users || null,
     validation_why_it_matters: raw.validation_why_it_matters || null,
@@ -85,6 +96,9 @@ export async function getIdeas(
     } = await supabase.auth.getUser();
 
     let qb = supabase.from("ideas").select("*, creator:profiles!creator_id(*)");
+
+    // Exclude archived and soft-deleted ideas from public discovery
+    qb = qb.is("deleted_at", null).neq("status", "archived");
 
     // Enforce Visibility at query layer:
     // - Authenticated: can view public, community, and their own private ideas
@@ -136,8 +150,9 @@ export async function getIdeasByUserId(userId: string): Promise<Idea[]> {
       .select("*, creator:profiles!creator_id(id, full_name, username, avatar_url)")
       .eq("creator_id", userId);
 
-    // If viewing someone else's profile, hide their private ideas
+    // If viewing someone else's profile, hide their private ideas and archived ideas
     if (!user || user.id !== userId) {
+      qb = qb.is("deleted_at", null).neq("status", "archived");
       qb = user
         ? qb.or("visibility.eq.public,visibility.eq.community")
         : qb.eq("visibility", "public");
@@ -169,6 +184,25 @@ export async function getIdeaById(id: string): Promise<Idea | null> {
       .maybeSingle();
 
     if (data && !error) {
+      // If idea is archived, only creator and connected project members can access it
+      if (data.status === "archived" || data.deleted_at) {
+        if (!user) return null;
+        if (user.id !== data.creator_id) {
+          const { data: projectLinks } = await supabase
+            .from("projects")
+            .select("id, owner_id, project_members(user_id)")
+            .eq("idea_id", id);
+
+          const isConnected = (projectLinks || []).some(
+            (p: any) =>
+              p.owner_id === user.id ||
+              p.project_members?.some((m: any) => m.user_id === user.id)
+          );
+
+          if (!isConnected) return null;
+        }
+      }
+
       // Enforce strict idea visibility protection
       if (data.visibility === "private" && (!user || user.id !== data.creator_id)) {
         return null; // Private ideas are strictly creator-only
@@ -516,7 +550,49 @@ export async function addIdeaComment(ideaId: string, content: string): Promise<I
   return inserted;
 }
 
-export async function deleteIdea(id: string): Promise<void> {
+export async function checkIdeaDependencies(id: string): Promise<{
+  hasDependencies: boolean;
+  projects: IdeaDependencyProject[];
+}> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("check_idea_dependencies", {
+      target_idea_id: id,
+    });
+
+    if (!error && data) {
+      return {
+        hasDependencies: Boolean(data.has_dependencies),
+        projects: Array.isArray(data.projects) ? data.projects : [],
+      };
+    }
+
+    // Direct fallback query
+    const { data: projectRows, error: projErr } = await supabase
+      .from("projects")
+      .select("id, name, owner_id, status")
+      .eq("idea_id", id);
+
+    if (projErr) throw projErr;
+
+    const projects: IdeaDependencyProject[] = (projectRows || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      owner_id: p.owner_id,
+      status: p.status,
+    }));
+
+    return {
+      hasDependencies: projects.length > 0,
+      projects,
+    };
+  } catch (err) {
+    console.error("Error in checkIdeaDependencies:", err);
+    return { hasDependencies: false, projects: [] };
+  }
+}
+
+export async function deleteIdea(id: string): Promise<IdeaDeleteResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -527,7 +603,7 @@ export async function deleteIdea(id: string): Promise<void> {
   // 1. Fetch idea to verify existence and ownership
   const { data: idea, error: fetchErr } = await supabase
     .from("ideas")
-    .select("id, creator_id")
+    .select("id, creator_id, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -539,16 +615,60 @@ export async function deleteIdea(id: string): Promise<void> {
     throw new Error("Unauthorized: You do not have permission to delete this idea.");
   }
 
-  // 2. Cascade cleanup dependent records
+  // 2. Execute transactional deletion / dependency validation via RPC
+  const { data: rpcResult, error: rpcErr } = await supabase.rpc("delete_or_archive_idea", {
+    p_idea_id: id,
+    p_user_id: user.id,
+    p_action: "delete",
+  });
+
+  if (!rpcErr && rpcResult) {
+    if (!rpcResult.success) {
+      if (rpcResult.code === "IDEA_HAS_DEPENDENCIES") {
+        const error: any = new Error(
+          rpcResult.message || "This idea is linked to active project(s) and cannot be permanently deleted. You can archive it instead."
+        );
+        error.code = "IDEA_HAS_DEPENDENCIES";
+        error.dependencies = rpcResult.dependencies || { projects: [] };
+        throw error;
+      }
+      throw new Error(rpcResult.message || "Failed to delete idea.");
+    }
+
+    // Automatically re-evaluate user badges to revoke/update achievements upon idea deletion
+    evaluateUserBadges(user.id).catch((err) =>
+      console.warn("Badge re-evaluation on deleteIdea error:", err)
+    );
+
+    return {
+      success: true,
+      action: "deleted",
+      message: "Idea permanently deleted successfully.",
+    };
+  }
+
+  // Fallback: If RPC not present, manual check and transactional cleanup
+  const dep = await checkIdeaDependencies(id);
+  if (dep.hasDependencies) {
+    const error: any = new Error(
+      "This idea is linked to active project(s) and cannot be permanently deleted. You can archive it instead."
+    );
+    error.code = "IDEA_HAS_DEPENDENCIES";
+    error.dependencies = { projects: dep.projects };
+    throw error;
+  }
+
+  // Cascade cleanup dependent records
   await Promise.allSettled([
     supabase.from("idea_comments").delete().eq("idea_id", id),
     supabase.from("idea_likes").delete().eq("idea_id", id),
-    supabase.from("idea_tags").delete().eq("idea_id", id),
-    supabase.from("idea_votes").delete().eq("idea_id", id),
+    supabase.from("idea_bookmarks").delete().eq("idea_id", id),
+    supabase.from("idea_requirements").delete().eq("idea_id", id),
     supabase.from("idea_validation_feedback").delete().eq("idea_id", id),
+    supabase.from("notifications").delete().eq("idea_id", id),
   ]);
 
-  // 3. Delete the parent idea record
+  // Delete the parent idea record
   const { error: deleteErr } = await supabase
     .from("ideas")
     .delete()
@@ -563,6 +683,85 @@ export async function deleteIdea(id: string): Promise<void> {
   evaluateUserBadges(user.id).catch((err) =>
     console.warn("Badge re-evaluation on deleteIdea error:", err)
   );
+
+  return {
+    success: true,
+    action: "deleted",
+    message: "Idea permanently deleted successfully.",
+  };
+}
+
+export async function archiveIdea(id: string): Promise<IdeaDeleteResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be logged in to archive an idea.");
+  }
+
+  // 1. Fetch idea to verify existence and ownership
+  const { data: idea, error: fetchErr } = await supabase
+    .from("ideas")
+    .select("id, creator_id, title")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr || !idea) {
+    throw new Error("Idea not found.");
+  }
+
+  if (idea.creator_id !== user.id) {
+    throw new Error("Unauthorized: You do not have permission to archive this idea.");
+  }
+
+  // 2. Execute via RPC
+  const { data: rpcResult, error: rpcErr } = await supabase.rpc("delete_or_archive_idea", {
+    p_idea_id: id,
+    p_user_id: user.id,
+    p_action: "archive",
+  });
+
+  if (!rpcErr && rpcResult) {
+    if (!rpcResult.success) {
+      throw new Error(rpcResult.message || "Failed to archive idea.");
+    }
+
+    evaluateUserBadges(user.id).catch((err) =>
+      console.warn("Badge re-evaluation on archiveIdea error:", err)
+    );
+
+    return {
+      success: true,
+      action: "archived",
+      message: "Idea archived successfully. Project continuity preserved.",
+    };
+  }
+
+  // Fallback: direct update
+  const { error: updateErr } = await supabase
+    .from("ideas")
+    .update({
+      status: "archived",
+      deleted_at: new Date().toISOString(),
+      deleted_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("creator_id", user.id);
+
+  if (updateErr) {
+    throw new Error(updateErr.message || "Failed to archive idea.");
+  }
+
+  evaluateUserBadges(user.id).catch((err) =>
+    console.warn("Badge re-evaluation on archiveIdea error:", err)
+  );
+
+  return {
+    success: true,
+    action: "archived",
+    message: "Idea archived successfully. Project continuity preserved.",
+  };
 }
 
 /* =========================================================================

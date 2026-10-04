@@ -1,7 +1,66 @@
 "use server";
 
-import { createIdea, updateIdea, toggleLikeIdea, addIdeaComment, getIdeas, getIdeaById, deleteIdea } from "@/services/ideas";
+import {
+  createIdea,
+  updateIdea,
+  toggleLikeIdea,
+  addIdeaComment,
+  getIdeas,
+  getIdeaById,
+  deleteIdea,
+  archiveIdea,
+  checkIdeaDependencies,
+} from "@/services/ideas";
 import { revalidatePath } from "next/cache";
+
+export async function checkIdeaDependenciesAction(ideaId: string) {
+  try {
+    if (!ideaId) return { error: "Idea ID is required." };
+    const dep = await checkIdeaDependencies(ideaId);
+    return { success: true, hasDependencies: dep.hasDependencies, projects: dep.projects };
+  } catch (err: any) {
+    console.error("Error in checkIdeaDependenciesAction:", err);
+    return { error: err?.message || "Failed to inspect idea dependencies." };
+  }
+}
+
+export async function deleteIdeaAction(ideaId: string) {
+  try {
+    if (!ideaId) return { error: "Idea ID is required." };
+    const res = await deleteIdea(ideaId);
+    revalidatePath("/ideas");
+    revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    revalidatePath(`/ideas/${ideaId}`);
+    return { success: true, action: res.action || "deleted" };
+  } catch (err: any) {
+    if (err?.code === "IDEA_HAS_DEPENDENCIES") {
+      return {
+        success: false,
+        code: "IDEA_HAS_DEPENDENCIES",
+        message: err.message,
+        dependencies: err.dependencies,
+      };
+    }
+    console.error("Error in deleteIdeaAction:", err);
+    return { success: false, error: err?.message || "Failed to delete idea. Please try again." };
+  }
+}
+
+export async function archiveIdeaAction(ideaId: string) {
+  try {
+    if (!ideaId) return { error: "Idea ID is required." };
+    const res = await archiveIdea(ideaId);
+    revalidatePath("/ideas");
+    revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    revalidatePath(`/ideas/${ideaId}`);
+    return { success: true, action: "archived", message: res.message || "Idea archived successfully." };
+  } catch (err: any) {
+    console.error("Error in archiveIdeaAction:", err);
+    return { success: false, error: err?.message || "Failed to archive idea. Please try again." };
+  }
+}
 
 export async function createIdeaAction(formData: FormData) {
   try {
@@ -122,21 +181,6 @@ export async function addCommentAction(ideaId: string, content: string) {
     return { success: true, comment };
   } catch (err: any) {
     return { error: err?.message || "Failed to post comment." };
-  }
-}
-
-export async function deleteIdeaAction(ideaId: string) {
-  try {
-    if (!ideaId) return { error: "Idea ID is required." };
-    await deleteIdea(ideaId);
-    revalidatePath("/ideas");
-    revalidatePath("/dashboard");
-    revalidatePath("/profile");
-    revalidatePath(`/ideas/${ideaId}`);
-    return { success: true };
-  } catch (err: any) {
-    console.error("Error in deleteIdeaAction:", err);
-    return { error: err?.message || "Failed to delete idea. Please try again." };
   }
 }
 

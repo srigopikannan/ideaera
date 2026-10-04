@@ -4,10 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Idea, IdeaComment, IdeaValidationData, Profile } from "@/types";
-import { toggleLikeAction, addCommentAction, deleteIdeaAction } from "@/app/(dashboard)/actions/ideas";
+import { toggleLikeAction, addCommentAction, deleteIdeaAction, archiveIdeaAction, checkIdeaDependenciesAction } from "@/app/(dashboard)/actions/ideas";
 import { formatDate, formatFullDateTime } from "@/lib/utils";
 import { IdeaValidationSection } from "@/components/ideas/IdeaValidationSection";
 import {
+  Archive,
   ArrowLeft,
   Heart,
   Send,
@@ -119,11 +120,14 @@ export function IdeaDetailView({
   const activeDimIndex = Math.min(Math.floor(scrollProgress * DIMENSIONS.length), DIMENSIONS.length - 1);
   const activeDim = DIMENSIONS[activeDimIndex];
 
-  // Deletion and Editing state
+  // Deletion, Archiving and Editing state
   const isOwner = Boolean(currentUser?.id && currentIdea.author_id === currentUser.id);
   const [showMenu, setShowMenu] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isArchiving, setIsArchiving] = React.useState(false);
+  const [hasDependencies, setHasDependencies] = React.useState(false);
+  const [dependentProjects, setDependentProjects] = React.useState<Array<{ id: string; name: string; status?: string }>>([]);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -139,6 +143,24 @@ export function IdeaDetailView({
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMenu]);
+
+  const handleOpenDeleteModal = async () => {
+    setShowMenu(false);
+    setIsDeleteModalOpen(true);
+    setDeleteError(null);
+    setHasDependencies(false);
+    setDependentProjects([]);
+
+    try {
+      const dep = await checkIdeaDependenciesAction(idea.id);
+      if (dep.success && dep.hasDependencies) {
+        setHasDependencies(true);
+        setDependentProjects(dep.projects || []);
+      }
+    } catch {
+      // fallback
+    }
+  };
 
   const handleLike = async () => {
     const newLiked = !isLiked;
@@ -185,13 +207,43 @@ export function IdeaDetailView({
         setIsDeleteModalOpen(false);
         router.push("/ideas");
         router.refresh();
+      } else if (res.code === "IDEA_HAS_DEPENDENCIES") {
+        setHasDependencies(true);
+        setDependentProjects(res.dependencies?.projects || []);
+        setDeleteError(null);
       } else {
-        setDeleteError(res.error || "Failed to delete idea.");
+        setDeleteError(res.error || res.message || "Failed to delete idea.");
       }
     } catch (err: any) {
-      setDeleteError(err?.message || "An unexpected error occurred.");
+      if (err?.code === "IDEA_HAS_DEPENDENCIES") {
+        setHasDependencies(true);
+        setDependentProjects(err.dependencies?.projects || []);
+        setDeleteError(null);
+      } else {
+        setDeleteError(err?.message || "An unexpected error occurred.");
+      }
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleArchiveConfirm = async () => {
+    setIsArchiving(true);
+    setDeleteError(null);
+
+    try {
+      const res = await archiveIdeaAction(idea.id);
+      if (res.success) {
+        setIsDeleteModalOpen(false);
+        router.push("/ideas");
+        router.refresh();
+      } else {
+        setDeleteError(res.error || res.message || "Failed to archive idea.");
+      }
+    } catch (err: any) {
+      setDeleteError(err?.message || "An unexpected error occurred while archiving.");
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -273,10 +325,7 @@ export function IdeaDetailView({
                     <span>Edit Concept</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setShowMenu(false);
-                      setIsDeleteModalOpen(true);
-                    }}
+                    onClick={handleOpenDeleteModal}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-left"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -288,6 +337,18 @@ export function IdeaDetailView({
           )}
         </div>
       </div>
+
+      {/* Archived Status Warning Banner */}
+      {(currentIdea.status === "archived" || currentIdea.deleted_at) && (
+        <div className="max-w-6xl mx-auto px-5 sm:px-12 pt-4">
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs font-mono">
+            <Archive className="h-4 w-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Archived Concept:</strong> This idea is hidden from public discovery and search feeds to preserve connected team project continuity.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* DIMENSION 01: THE IDEA (Hero Composition) */}
       <section className="relative min-h-[85vh] flex flex-col justify-center px-5 sm:px-12 max-w-6xl mx-auto">
@@ -667,18 +728,24 @@ export function IdeaDetailView({
         </div>
       </section>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete / Archive Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
-          if (!isDeleting) {
+          if (!isDeleting && !isArchiving) {
             setIsDeleteModalOpen(false);
             setDeleteError(null);
+            setHasDependencies(false);
+            setDependentProjects([]);
           }
         }}
         onConfirm={handleDeleteConfirm}
+        onArchive={handleArchiveConfirm}
+        hasDependencies={hasDependencies}
+        dependentProjects={dependentProjects}
+        isArchiving={isArchiving}
         title="Delete Concept"
-        description={'Are you sure you want to permanently delete "' + currentIdea.title + '"? This action cannot be undone.'}
+        description={'Are you sure you want to permanently delete "' + currentIdea.title + '"? This action cannot be undone. All critique notes and bookmarks will be removed.'}
         isDeleting={isDeleting}
         error={deleteError}
       />

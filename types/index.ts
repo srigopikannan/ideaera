@@ -68,12 +68,14 @@ export interface Idea {
   version_history?: IdeaVersion[];
   category: string;
   tags: string[];
-  status: 'open' | 'in_progress' | 'implemented';
+  status: 'open' | 'in_progress' | 'implemented' | 'archived';
   visibility?: 'public' | 'community' | 'selected' | 'private';
   likes_count: number;
   comments_count: number;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   is_liked?: boolean;
   validation_status?: 'not_validated' | 'testing' | 'validated';
   validation_target_users?: string | null;
@@ -87,6 +89,24 @@ export interface Idea {
     needs_work: number;
     impractical: number;
     percentage: number;
+  };
+}
+
+export interface IdeaDependencyProject {
+  id: string;
+  name: string;
+  owner_id?: string;
+  status?: string;
+}
+
+export interface IdeaDeleteResult {
+  success: boolean;
+  action?: 'deleted' | 'archived';
+  code?: 'IDEA_HAS_DEPENDENCIES' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'ERROR' | 'INVALID_ACTION';
+  message?: string;
+  error?: string;
+  dependencies?: {
+    projects: IdeaDependencyProject[];
   };
 }
   

@@ -54,8 +54,10 @@ export async function calculateUserMetrics(userId: string): Promise<UserActivity
     await Promise.all([
       supabase
         .from("ideas")
-        .select("id, title, description, problem, solution, validation_status")
-        .eq("creator_id", userId),
+        .select("id, title, description, problem, solution, validation_status, status, deleted_at")
+        .eq("creator_id", userId)
+        .is("deleted_at", null)
+        .neq("status", "archived"),
       supabase
         .from("projects")
         .select("id, name, description, repository_url, deployment_url, required_skills, status")
